@@ -145,3 +145,25 @@
   box with an icon send button and an icon-badged answer bubble.
 - Verified visually via the same local Expo web preview against sample data
   before committing.
+
+## Professional Mobile Redesign
+
+- Added a mobile design system in `mobile/app/ui/`: colour, spacing, radius,
+  shadow and typography tokens (Inter via `@expo-google-fonts/inter`), plus
+  shared `Txt`, `Card`, `Button`, `IconBadge`, `SectionHeader`, `EmptyState`,
+  `Skeleton` and SVG `DonutChart` components.
+- Replaced the single stack with bottom-tab navigation (Home, Insights) and a
+  floating "Add expense" action, via `@react-navigation/bottom-tabs`.
+- Home: gradient dashboard with this-month spend, category share bar,
+  quick actions, and activity grouped by day; skeleton loading and empty/error
+  states with actions.
+- Insights: AI summary card, stat tiles, category donut chart with legend,
+  insights, numbered recommendations, and a chat-style Ask box with
+  suggested questions.
+- Scan flow: redesigned camera controls and quality-warning sheet, preview
+  bottom sheet with a readability checklist, a step-by-step processing screen
+  with retry/retake on failure, and a Review screen with labelled inputs,
+  confidence card, and summary. Save/validation logic is unchanged.
+- Added `accessibilityRole` to icon-only buttons.
+- Verified every screen visually via a local Expo web preview with sample
+  data; preview-only scaffolding was removed before committing.

@@ -1,44 +1,40 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { StyleSheet, View } from 'react-native';
 import { FinancialRecordSummary } from '../../types/insights';
-import { getCategoryStyle } from '../../utils/categoryStyle';
-
-function formatAmount(amount: number | null, currency: string | null): string {
-  if (amount === null) return '—';
-  const formatted = amount.toLocaleString(undefined, { maximumFractionDigits: 2 });
-  return currency ? `${currency} ${formatted}` : formatted;
-}
-
-function formatDate(date: string | null): string {
-  if (!date) return 'Date unknown';
-  const parsed = new Date(date);
-  if (Number.isNaN(parsed.getTime())) return date;
-  return parsed.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
+import { documentTypeLabel, getCategoryStyle } from '../../utils/categoryStyle';
+import { capitalize, formatMoney } from '../../utils/format';
+import IconBadge from '../../ui/IconBadge';
+import Txt from '../../ui/Txt';
+import { colors, radius, spacing } from '../../ui/theme';
 
 type Props = {
   record: FinancialRecordSummary;
+  isFirst: boolean;
+  isLast: boolean;
 };
 
-export default function TransactionRow({ record }: Props) {
+export default function TransactionRow({ record, isFirst, isLast }: Props) {
   const style = getCategoryStyle(record.category, record.document_type);
+  const subtitle = [
+    record.category ? capitalize(record.category) : null,
+    documentTypeLabel(record.document_type),
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
-    <View style={styles.row}>
-      <View style={[styles.iconBadge, { backgroundColor: style.tint }]}>
-        <Ionicons name={style.icon} size={20} color={style.color} />
-      </View>
+    <View style={[styles.row, isFirst && styles.first, isLast && styles.last]}>
+      <IconBadge icon={style.icon} color={style.color} tint={style.tint} size={42} />
       <View style={styles.details}>
-        <Text style={styles.merchant} numberOfLines={1}>
+        <Txt variant="bodyStrong" numberOfLines={1}>
           {record.merchant || 'Unknown merchant'}
-        </Text>
-        <Text style={styles.meta} numberOfLines={1}>
-          {record.category ? `${record.category} · ` : ''}
-          {formatDate(record.transaction_date)}
-        </Text>
+        </Txt>
+        <Txt variant="caption" color={colors.inkMuted} numberOfLines={1}>
+          {subtitle}
+        </Txt>
       </View>
-      <Text style={styles.amount}>{formatAmount(record.amount, record.currency)}</Text>
+      <Txt variant="bodyStrong">{formatMoney(record.amount, record.currency)}</Txt>
+      {!isLast && <View style={styles.divider} />}
     </View>
   );
 }
@@ -47,42 +43,28 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 10,
-    shadowColor: '#1A1A2E',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 1,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 14,
   },
-  iconBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
+  first: {
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+  },
+  last: {
+    borderBottomLeftRadius: radius.xl,
+    borderBottomRightRadius: radius.xl,
   },
   details: {
     flex: 1,
-    marginRight: 8,
+    marginHorizontal: spacing.md,
   },
-  merchant: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#1A1A2E',
-    marginBottom: 2,
-  },
-  meta: {
-    fontSize: 12,
-    color: '#8B94A0',
-    textTransform: 'capitalize',
-  },
-  amount: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#1B5E3B',
+  divider: {
+    position: 'absolute',
+    left: 70,
+    right: spacing.lg,
+    bottom: 0,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border,
   },
 });

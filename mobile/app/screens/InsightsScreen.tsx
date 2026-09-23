@@ -1,34 +1,58 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  ActivityIndicator,
-  TextInput,
-  TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  View,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { CompositeScreenProps, useFocusEffect } from '@react-navigation/native';
+import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { RootStackParamList, TabParamList } from '../navigation/AppNavigator';
 import { InsightsResponse } from '../types/insights';
-import { fetchInsights, askInsights, ApiError } from '../services/insightsService';
-import SectionTitle from '../components/review/SectionTitle';
-import CategoryBar from '../components/insights/CategoryBar';
-import BulletList from '../components/insights/BulletList';
+import { askInsights, ApiError, fetchInsights } from '../services/insightsService';
+import ChatBubble, { ChatMessage } from '../components/insights/ChatBubble';
+import { getCategoryStyle } from '../utils/categoryStyle';
+import { capitalize, formatMoney } from '../utils/format';
+import Txt from '../ui/Txt';
+import Card from '../ui/Card';
+import IconBadge from '../ui/IconBadge';
+import SectionHeader from '../ui/SectionHeader';
+import EmptyState from '../ui/EmptyState';
+import Skeleton from '../ui/Skeleton';
+import DonutChart from '../ui/DonutChart';
+import FocusStatusBar from '../ui/FocusStatusBar';
+import { colors, fonts, gradients, radius, spacing } from '../ui/theme';
+
+type Props = CompositeScreenProps<
+  BottomTabScreenProps<TabParamList, 'Insights'>,
+  NativeStackScreenProps<RootStackParamList>
+>;
 
 type LoadState = 'loading' | 'loaded' | 'empty' | 'error';
 
-export default function InsightsScreen() {
+const SUGGESTIONS = [
+  'What did I spend the most on?',
+  'How much went to groceries?',
+  'Any bills I should watch?',
+];
+
+export default function InsightsScreen({ navigation }: Props) {
+  const insets = useSafeAreaInsets();
+  const scrollRef = useRef<ScrollView>(null);
+  const nextId = useRef(0);
+
   const [data, setData] = useState<InsightsResponse | null>(null);
   const [state, setState] = useState<LoadState>('loading');
-
   const [question, setQuestion] = useState('');
-  const [answer, setAnswer] = useState<string | null>(null);
-  const [asking, setAsking] = useState(false);
-  const [askError, setAskError] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const asking = messages.some((m) => m.role === 'pending');
 
   const load = useCallback(async () => {
     setState('loading');
@@ -47,356 +71,386 @@ export default function InsightsScreen() {
     }, [load]),
   );
 
-  const handleAsk = async () => {
-    const trimmed = question.trim();
+  const ask = async (text: string) => {
+    const trimmed = text.trim();
     if (!trimmed || asking) return;
 
-    setAsking(true);
-    setAskError(null);
-    setAnswer(null);
+    const pendingId = nextId.current + 1;
+    nextId.current += 2;
+    setQuestion('');
+    setMessages((prev) => [
+      ...prev,
+      { id: pendingId - 1, role: 'user', text: trimmed },
+      { id: pendingId, role: 'pending', text: '' },
+    ]);
+
+    let reply: ChatMessage;
     try {
       const result = await askInsights(trimmed);
-      setAnswer(result.answer);
+      reply = { id: pendingId, role: 'assistant', text: result.answer };
     } catch (error) {
-      if (error instanceof ApiError && error.status === 503) {
-        setAskError('AI insights are temporarily unavailable. Please try again shortly.');
-      } else {
-        setAskError('Could not get an answer. Check your connection and try again.');
-      }
-    } finally {
-      setAsking(false);
+      reply = {
+        id: pendingId,
+        role: 'error',
+        text:
+          error instanceof ApiError && error.status === 503
+            ? 'AI insights are temporarily unavailable. Please try again shortly.'
+            : 'Could not get an answer. Check your connection and try again.',
+      };
     }
+    setMessages((prev) => prev.map((m) => (m.id === pendingId ? reply : m)));
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
   };
 
+  const header = (
+    <View style={styles.header}>
+      <View style={styles.flex}>
+        <Txt variant="overline" color={colors.primary}>
+          AI copilot
+        </Txt>
+        <Txt variant="title" style={styles.headerTitle}>
+          Insights
+        </Txt>
+      </View>
+      <Pressable onPress={load} style={styles.refresh} accessibilityRole="button"
+          accessibilityLabel="Refresh insights" hitSlop={8}>
+        <Ionicons name="refresh" size={18} color={colors.inkSecondary} />
+      </Pressable>
+    </View>
+  );
+
+  let content: React.ReactNode;
+
   if (state === 'loading') {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator color="#1B5E3B" size="large" />
-      </View>
+    content = (
+      <>
+        <Skeleton height={150} rounded={radius.xl} />
+        <Skeleton height={280} rounded={radius.xl} style={styles.gapTop} />
+        <Skeleton height={120} rounded={radius.xl} style={styles.gapTop} />
+      </>
     );
-  }
-
-  if (state === 'error') {
-    return (
-      <View style={styles.centered}>
-        <View style={[styles.emptyIconCircle, { backgroundColor: '#FBEAE8' }]}>
-          <Ionicons name="cloud-offline" size={32} color="#C0392B" />
-        </View>
-        <Text style={styles.emptyTitle}>Couldn't load insights</Text>
-        <Text style={styles.emptyText}>
-          The AI insights service may be unavailable. Pull to refresh or try again shortly.
-        </Text>
-      </View>
+  } else if (state === 'error') {
+    content = (
+      <Card>
+        <EmptyState
+          icon="cloud-offline"
+          tone="danger"
+          title="Couldn’t load insights"
+          body="The AI insights service may be unavailable right now."
+          actionLabel="Try again"
+          onAction={load}
+        />
+      </Card>
     );
-  }
-
-  if (state === 'empty' || !data) {
-    return (
-      <View style={styles.centered}>
-        <View style={styles.emptyIconCircle}>
-          <Ionicons name="sparkles" size={32} color="#1B5E3B" />
-        </View>
-        <Text style={styles.emptyTitle}>No insights yet</Text>
-        <Text style={styles.emptyText}>
-          Save a few expenses first — insights are generated from your saved records.
-        </Text>
-      </View>
+  } else if (state === 'empty' || !data) {
+    content = (
+      <Card>
+        <EmptyState
+          icon="sparkles"
+          title="No insights yet"
+          body="Save a few expenses first — insights are generated from your saved records."
+          actionLabel="Scan a receipt"
+          onAction={() => navigation.navigate('Camera')}
+        />
+      </Card>
     );
-  }
+  } else {
+    const { summary, headline, insights, recommendations } = data;
+    const categories = [...summary.by_category].sort((a, b) => b.total_amount - a.total_amount);
+    const average = summary.record_count > 0 ? summary.total_amount / summary.record_count : 0;
+    const topMerchant = summary.top_merchants[0]?.category ?? '—';
+    const segments = categories.map((c) => ({
+      key: c.category,
+      value: c.total_amount,
+      color: getCategoryStyle(c.category).color,
+    }));
 
-  const { summary, headline, insights, recommendations } = data;
-  const maxCategory = Math.max(0, ...summary.by_category.map((c) => c.total_amount));
-
-  return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Hero summary */}
-        <LinearGradient colors={['#1F6E45', '#123D28']} style={styles.heroCard}>
-          <View style={styles.heroTopRow}>
-            <View style={styles.heroIconBadge}>
-              <Ionicons name="stats-chart" size={16} color="#FFFFFF" />
-            </View>
-            <Text style={styles.heroLabel}>Total spending</Text>
+    content = (
+      <>
+        {/* ── AI summary ───────────────────────────────────── */}
+        <LinearGradient
+          colors={gradients.brand}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.summary}
+        >
+          <View style={styles.summaryTop}>
+            <IconBadge icon="sparkles" color={colors.gold} tint="rgba(255,255,255,0.14)" size={32} />
+            <Txt variant="overline" color={colors.inkInverseMuted} style={styles.summaryLabel}>
+              AI summary
+            </Txt>
           </View>
-          <Text style={styles.heroAmount}>
-            {summary.currency ? `${summary.currency} ` : ''}
-            {summary.total_amount.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-          </Text>
-          <Text style={styles.heroMeta}>
-            Across {summary.record_count} record{summary.record_count === 1 ? '' : 's'}
-          </Text>
-          <View style={styles.heroDivider} />
-          <View style={styles.headlineRow}>
-            <Ionicons name="bulb" size={15} color="#FFD782" style={styles.headlineIcon} />
-            <Text style={styles.headline}>{headline}</Text>
-          </View>
+          <Txt variant="heading" color={colors.inkInverse} style={styles.headline}>
+            {headline}
+          </Txt>
         </LinearGradient>
 
-        {summary.by_category.length > 0 && (
+        {/* ── Stat tiles ───────────────────────────────────── */}
+        <View style={styles.tiles}>
+          <Card style={styles.tile}>
+            <Txt variant="caption" color={colors.inkMuted}>
+              Transactions
+            </Txt>
+            <Txt variant="heading" style={styles.tileValue}>
+              {summary.record_count}
+            </Txt>
+          </Card>
+          <Card style={styles.tile}>
+            <Txt variant="caption" color={colors.inkMuted}>
+              Avg. spend
+            </Txt>
+            <Txt variant="heading" style={styles.tileValue} numberOfLines={1}>
+              {formatMoney(average, null)}
+            </Txt>
+          </Card>
+          <Card style={styles.tile}>
+            <Txt variant="caption" color={colors.inkMuted}>
+              Top merchant
+            </Txt>
+            <Txt variant="heading" style={styles.tileValue} numberOfLines={1}>
+              {topMerchant}
+            </Txt>
+          </Card>
+        </View>
+
+        {/* ── Category breakdown ───────────────────────────── */}
+        {segments.length > 0 && (
           <>
-            <SectionTitle title="Spending by Category" />
-            <View style={styles.card}>
-              {summary.by_category.map((category) => (
-                <CategoryBar
-                  key={category.category}
-                  category={category}
-                  maxAmount={maxCategory}
-                  currency={summary.currency}
-                />
-              ))}
-            </View>
+            <SectionHeader title="Where your money goes" subtitle="Share of total spending" />
+            <Card>
+              <View style={styles.donutWrap}>
+                <DonutChart segments={segments} size={188} thickness={22}>
+                  <Txt variant="overline" color={colors.inkMuted}>
+                    Total {summary.currency ?? ''}
+                  </Txt>
+                  <Txt variant="title" style={styles.donutTotal}>
+                    {formatMoney(summary.total_amount, null)}
+                  </Txt>
+                </DonutChart>
+              </View>
+              {categories.map((c, i) => {
+                const style = getCategoryStyle(c.category);
+                const share = summary.total_amount > 0 ? c.total_amount / summary.total_amount : 0;
+                return (
+                  <View
+                    key={c.category}
+                    style={[styles.legendRow, i > 0 && styles.legendDivider]}
+                  >
+                    <IconBadge icon={style.icon} color={style.color} tint={style.tint} size={34} />
+                    <View style={styles.legendText}>
+                      <Txt variant="label">{capitalize(c.category)}</Txt>
+                      <Txt variant="caption" color={colors.inkMuted}>
+                        {c.record_count} record{c.record_count === 1 ? '' : 's'}
+                      </Txt>
+                    </View>
+                    <View style={styles.legendRight}>
+                      <Txt variant="bodyStrong">{formatMoney(c.total_amount, summary.currency)}</Txt>
+                      <Txt variant="caption" color={style.color} style={styles.share}>
+                        {Math.round(share * 100)}%
+                      </Txt>
+                    </View>
+                  </View>
+                );
+              })}
+            </Card>
           </>
         )}
 
+        {/* ── Insights & recommendations ───────────────────── */}
         {insights.length > 0 && (
           <>
-            <SectionTitle title="Insights" />
-            <View style={styles.card}>
-              <BulletList
-                icon="bulb"
-                iconColor="#B8860B"
-                iconTint="#FBF2DA"
-                items={insights}
-              />
-            </View>
+            <SectionHeader title="Key insights" />
+            <Card>
+              {insights.map((item, i) => (
+                <View key={i} style={[styles.pointRow, i > 0 && styles.pointGap]}>
+                  <IconBadge icon="bulb" color={colors.warning} tint={colors.warningSoft} size={30} />
+                  <Txt variant="label" color={colors.inkSecondary} style={styles.pointText}>
+                    {item}
+                  </Txt>
+                </View>
+              ))}
+            </Card>
           </>
         )}
 
         {recommendations.length > 0 && (
           <>
-            <SectionTitle title="Recommendations" />
-            <View style={styles.card}>
-              <BulletList
-                icon="checkmark-circle"
-                iconColor="#1B5E3B"
-                iconTint="#E3F3E9"
-                items={recommendations}
-              />
-            </View>
+            <SectionHeader title="Recommendations" />
+            <Card>
+              {recommendations.map((item, i) => (
+                <View key={i} style={[styles.pointRow, i > 0 && styles.pointGap]}>
+                  <View style={styles.stepBadge}>
+                    <Txt variant="overline" color={colors.primary} style={styles.stepNumber}>
+                      {i + 1}
+                    </Txt>
+                  </View>
+                  <Txt variant="label" color={colors.inkSecondary} style={styles.pointText}>
+                    {item}
+                  </Txt>
+                </View>
+              ))}
+            </Card>
           </>
         )}
 
-        <SectionTitle title="Ask KharchAI" />
-        <View style={styles.card}>
-          <Text style={styles.askHint}>
-            Ask a question about your spending — answers are grounded in your saved records.
-          </Text>
-          <View style={styles.askRow}>
+        {/* ── Ask KharchAI ─────────────────────────────────── */}
+        <SectionHeader title="Ask KharchAI" subtitle="Answers are grounded in your saved records" />
+        <Card>
+          {messages.length === 0 ? (
+            <View style={styles.chips}>
+              {SUGGESTIONS.map((s) => (
+                <Pressable
+                  key={s}
+                  onPress={() => ask(s)}
+                  style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
+                >
+                  <Ionicons name="chatbubble-ellipses-outline" size={14} color={colors.primary} />
+                  <Txt variant="caption" color={colors.primaryDark} style={styles.chipText}>
+                    {s}
+                  </Txt>
+                </Pressable>
+              ))}
+            </View>
+          ) : (
+            <View style={styles.chat}>
+              {messages.map((m) => (
+                <ChatBubble key={m.id} message={m} />
+              ))}
+            </View>
+          )}
+          <View style={styles.inputRow}>
             <TextInput
-              style={styles.askInput}
-              placeholder="e.g. What did I spend the most on?"
-              placeholderTextColor="#A6ADB6"
+              style={styles.input}
+              placeholder="Ask about your spending…"
+              placeholderTextColor={colors.inkMuted}
               value={question}
               onChangeText={setQuestion}
-              onSubmitEditing={handleAsk}
+              onSubmitEditing={() => ask(question)}
               returnKeyType="send"
             />
-            <TouchableOpacity
-              style={[styles.askButton, (!question.trim() || asking) && styles.askButtonDisabled]}
-              onPress={handleAsk}
+            <Pressable
+              onPress={() => ask(question)}
               disabled={!question.trim() || asking}
-              activeOpacity={0.85}
+              style={[styles.send, (!question.trim() || asking) && styles.sendDisabled]}
+              accessibilityRole="button"
+          accessibilityLabel="Send question"
             >
-              {asking ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
-              ) : (
-                <Ionicons name="send" size={16} color="#FFFFFF" />
-              )}
-            </TouchableOpacity>
+              <Ionicons name="arrow-up" size={20} color={colors.inkInverse} />
+            </Pressable>
           </View>
-          {askError && (
-            <View style={styles.askErrorRow}>
-              <Ionicons name="alert-circle" size={14} color="#C0392B" />
-              <Text style={styles.askError}>{askError}</Text>
-            </View>
-          )}
-          {answer && (
-            <View style={styles.answerBox}>
-              <View style={styles.answerIconBadge}>
-                <Ionicons name="sparkles" size={13} color="#1B5E3B" />
-              </View>
-              <Text style={styles.answerText}>{answer}</Text>
-            </View>
-          )}
-        </View>
+        </Card>
+      </>
+    );
+  }
+
+  return (
+    <KeyboardAvoidingView
+      style={styles.screen}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <FocusStatusBar style="dark" />
+      <ScrollView
+        ref={scrollRef}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.lg }]}
+      >
+        {header}
+        {content}
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
+  screen: { flex: 1, backgroundColor: colors.bg },
+  flex: { flex: 1 },
+  content: { paddingHorizontal: spacing.xl, paddingBottom: spacing.xxl },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    marginBottom: spacing.xl,
   },
-  container: {
-    flex: 1,
-    backgroundColor: '#F7F8FA',
-  },
-  content: {
-    padding: 24,
-    paddingBottom: 40,
-  },
-  centered: {
-    flex: 1,
+  headerTitle: { marginTop: 2 },
+  refresh: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F7F8FA',
-    padding: 32,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  emptyIconCircle: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    backgroundColor: '#E3F3E9',
+  gapTop: { marginTop: spacing.lg },
+  summary: {
+    borderRadius: radius.xl,
+    padding: spacing.xl,
+  },
+  summaryTop: { flexDirection: 'row', alignItems: 'center' },
+  summaryLabel: { marginLeft: spacing.sm },
+  headline: { marginTop: spacing.md, fontSize: 18, lineHeight: 26 },
+  tiles: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
+  tile: { flex: 1, padding: spacing.md },
+  tileValue: { marginTop: spacing.xs },
+  donutWrap: { alignItems: 'center', marginBottom: spacing.lg },
+  donutTotal: { marginTop: 2 },
+  legendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+  },
+  legendDivider: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+  },
+  legendText: { flex: 1, marginLeft: spacing.md },
+  legendRight: { alignItems: 'flex-end' },
+  share: { fontFamily: fonts.semibold },
+  pointRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  pointGap: { marginTop: spacing.lg },
+  pointText: { flex: 1, marginLeft: spacing.md, marginTop: 4 },
+  stepBadge: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    backgroundColor: colors.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 18,
   },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1A1A2E',
-    marginBottom: 8,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: '#8B94A0',
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  heroCard: {
-    borderRadius: 22,
-    padding: 24,
-    marginBottom: 8,
-  },
-  heroTopRow: {
+  stepNumber: { fontSize: 13, letterSpacing: 0 },
+  chips: { gap: spacing.sm, marginBottom: spacing.lg },
+  chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
-  },
-  heroIconBadge: {
-    width: 26,
-    height: 26,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255,255,255,0.16)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-  },
-  heroLabel: {
-    fontSize: 12,
-    color: '#A8D5B8',
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-  },
-  heroAmount: {
-    fontSize: 34,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  heroMeta: {
-    fontSize: 12,
-    color: '#A8D5B8',
-    marginTop: 2,
-  },
-  heroDivider: {
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.16)',
-    marginVertical: 16,
-  },
-  headlineRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  headlineIcon: {
-    marginRight: 8,
-    marginTop: 2,
-  },
-  headline: {
-    flex: 1,
-    fontSize: 14,
-    color: '#FFFFFF',
-    lineHeight: 20,
-    fontWeight: '500',
-  },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 18,
-    shadowColor: '#1A1A2E',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 1,
-  },
-  askHint: {
-    fontSize: 12,
-    color: '#8B94A0',
-    marginBottom: 14,
-    lineHeight: 18,
-  },
-  askRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  askInput: {
-    flex: 1,
-    backgroundColor: '#F7F8FA',
-    borderRadius: 12,
+    alignSelf: 'flex-start',
+    backgroundColor: colors.primarySoft,
+    borderRadius: radius.pill,
     paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: '#1A1A2E',
+    paddingVertical: 9,
   },
-  askButton: {
-    backgroundColor: '#1B5E3B',
-    borderRadius: 12,
-    width: 46,
+  chipPressed: { opacity: 0.75 },
+  chipText: { marginLeft: 6, fontFamily: fonts.medium },
+  chat: { marginBottom: spacing.md },
+  inputRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  input: {
+    flex: 1,
+    minWidth: 0,
+    height: 48,
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.lg,
+    fontFamily: fonts.regular,
+    fontSize: 15,
+    color: colors.ink,
+  },
+  send: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  askButtonDisabled: {
-    opacity: 0.45,
-  },
-  askErrorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  askError: {
-    fontSize: 12,
-    color: '#C0392B',
-    marginLeft: 6,
-    flex: 1,
-  },
-  answerBox: {
-    flexDirection: 'row',
-    marginTop: 14,
-    backgroundColor: '#E3F3E9',
-    borderRadius: 14,
-    padding: 14,
-  },
-  answerIconBadge: {
-    width: 26,
-    height: 26,
-    borderRadius: 8,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-  },
-  answerText: {
-    flex: 1,
-    fontSize: 14,
-    color: '#1A1A2E',
-    lineHeight: 20,
-  },
+  sendDisabled: { opacity: 0.4 },
 });

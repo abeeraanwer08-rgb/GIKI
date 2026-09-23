@@ -1,168 +1,121 @@
 import React from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-} from 'react-native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/AppNavigator';
+import Txt from '../ui/Txt';
+import Card from '../ui/Card';
+import IconBadge from '../ui/IconBadge';
+import SectionHeader from '../ui/SectionHeader';
+import { colors, fonts, radius, spacing } from '../ui/theme';
 
-type AddExpenseScreenNavigationProp = NativeStackNavigationProp<
-  RootStackParamList,
-  'AddExpense'
->;
+type Props = NativeStackScreenProps<RootStackParamList, 'AddExpense'>;
 
-interface Props {
-  navigation: AddExpenseScreenNavigationProp;
-}
+const TIPS: { icon: keyof typeof Ionicons.glyphMap; title: string; body: string }[] = [
+  { icon: 'sunny-outline', title: 'Use good lighting', body: 'Avoid shadows and glare on the paper.' },
+  { icon: 'crop-outline', title: 'Fit the whole receipt', body: 'Keep all four edges inside the frame.' },
+  { icon: 'hand-left-outline', title: 'Hold steady', body: 'KharchAI warns you if the photo is blurry.' },
+];
 
 export default function AddExpenseScreen({ navigation }: Props) {
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}
-    >
-      <Text style={styles.heading}>How would you like to add your expense?</Text>
-      <Text style={styles.subheading}>
-        Scan a receipt and our AI will extract the details for you automatically.
-      </Text>
+    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+      <Txt variant="title">How would you like to add it?</Txt>
+      <Txt variant="body" color={colors.inkSecondary} style={styles.subtitle}>
+        Scan a receipt and KharchAI’s AI fills in the merchant, items and total for you.
+      </Txt>
 
-      {/* Primary action — Scan Receipt */}
-      <TouchableOpacity
-        style={styles.primaryCard}
+      <Pressable
         onPress={() => navigation.navigate('Camera')}
-        activeOpacity={0.85}
+        style={({ pressed }) => [pressed && styles.pressed]}
       >
-        <View style={styles.cardIconBadge}>
-          <Ionicons name="camera" size={22} color="#1B5E3B" />
-        </View>
-        <View style={styles.cardTextContainer}>
-          <Text style={styles.cardTitle}>Scan Receipt</Text>
-          <Text style={styles.cardDescription}>
-            Use your camera to scan a receipt — AI will fill in the details
-          </Text>
-        </View>
-        <Ionicons name="chevron-forward" size={22} color="#1B5E3B" />
-      </TouchableOpacity>
+        <Card style={[styles.option, styles.optionPrimary]}>
+          <IconBadge icon="scan" color={colors.primary} tint={colors.primarySoft} size={52} />
+          <View style={styles.optionText}>
+            <View style={styles.titleRow}>
+              <Txt variant="heading">Scan receipt</Txt>
+              <View style={styles.aiChip}>
+                <Txt variant="overline" color={colors.primary} style={styles.chipText}>
+                  AI
+                </Txt>
+              </View>
+            </View>
+            <Txt variant="caption" color={colors.inkSecondary}>
+              Receipts, utility bills and wallet screenshots
+            </Txt>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.primary} />
+        </Card>
+      </Pressable>
 
-      {/* Divider */}
-      <View style={styles.divider}>
-        <View style={styles.dividerLine} />
-        <Text style={styles.dividerText}>coming soon</Text>
-        <View style={styles.dividerLine} />
-      </View>
-
-      {/* Disabled — Manual entry */}
-      <View style={[styles.card, styles.disabledCard]}>
-        <View style={[styles.cardIconBadge, styles.cardIconBadgeDisabled]}>
-          <Ionicons name="create" size={22} color="#BBBBBB" />
-        </View>
-        <View style={styles.cardTextContainer}>
-          <Text style={[styles.cardTitle, styles.disabledText]}>Enter Manually</Text>
-          <Text style={[styles.cardDescription, styles.disabledText]}>
+      <Card style={[styles.option, styles.optionDisabled]}>
+        <IconBadge icon="create-outline" color={colors.inkMuted} tint={colors.surfaceMuted} size={52} />
+        <View style={styles.optionText}>
+          <View style={styles.titleRow}>
+            <Txt variant="heading" color={colors.inkMuted}>
+              Enter manually
+            </Txt>
+            <View style={styles.soonChip}>
+              <Txt variant="overline" color={colors.inkMuted} style={styles.chipText}>
+                Soon
+              </Txt>
+            </View>
+          </View>
+          <Txt variant="caption" color={colors.inkMuted}>
             Type in your expense details
-          </Text>
+          </Txt>
         </View>
-      </View>
+      </Card>
+
+      <SectionHeader title="Tips for a perfect scan" />
+      <Card>
+        {TIPS.map((tip, i) => (
+          <View key={tip.title} style={[styles.tip, i > 0 && styles.tipGap]}>
+            <IconBadge icon={tip.icon} color={colors.primary} tint={colors.primarySoft} size={36} />
+            <View style={styles.tipText}>
+              <Txt variant="bodyStrong">{tip.title}</Txt>
+              <Txt variant="caption" color={colors.inkSecondary}>
+                {tip.body}
+              </Txt>
+            </View>
+          </View>
+        ))}
+      </Card>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8F9FA',
-  },
-  content: {
-    padding: 24,
-    paddingTop: 32,
-  },
-  heading: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#1A1A2E',
-    marginBottom: 8,
-  },
-  subheading: {
-    fontSize: 14,
-    color: '#666666',
-    lineHeight: 22,
-    marginBottom: 32,
-  },
-  primaryCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
+  screen: { flex: 1, backgroundColor: colors.bg },
+  content: { padding: spacing.xl, paddingBottom: spacing.xxxl },
+  subtitle: { marginTop: spacing.sm, marginBottom: spacing.xxl },
+  option: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#1B5E3B',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
   },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E8EDF2',
+  optionPrimary: { borderWidth: 1.5, borderColor: colors.primaryTint },
+  optionDisabled: { opacity: 0.7 },
+  optionText: { flex: 1, marginHorizontal: spacing.md },
+  titleRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 2 },
+  aiChip: {
+    marginLeft: spacing.sm,
+    backgroundColor: colors.primarySoft,
+    borderRadius: radius.sm,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
   },
-  disabledCard: {
-    opacity: 0.45,
+  soonChip: {
+    marginLeft: spacing.sm,
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radius.sm,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
   },
-  cardIconBadge: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: '#E3F3E9',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16,
-  },
-  cardIconBadgeDisabled: {
-    backgroundColor: '#F0F1F3',
-  },
-  cardTextContainer: {
-    flex: 1,
-  },
-  cardTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#1A1A2E',
-    marginBottom: 4,
-  },
-  cardDescription: {
-    fontSize: 13,
-    color: '#666666',
-    lineHeight: 20,
-  },
-  disabledText: {
-    color: '#BBBBBB',
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 24,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#E8EDF2',
-  },
-  dividerText: {
-    fontSize: 12,
-    color: '#BBBBBB',
-    marginHorizontal: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
+  chipText: { fontFamily: fonts.bold, fontSize: 10 },
+  pressed: { opacity: 0.85, transform: [{ scale: 0.99 }] },
+  tip: { flexDirection: 'row', alignItems: 'center' },
+  tipGap: { marginTop: spacing.lg },
+  tipText: { flex: 1, marginLeft: spacing.md },
 });

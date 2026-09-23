@@ -1,22 +1,24 @@
 import React from 'react';
-import {
-  View,
-  Text,
-  Image,
-  TouchableOpacity,
-  StyleSheet,
-  SafeAreaView,
-  Dimensions,
-} from 'react-native';
+import { Image, StyleSheet, View } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/AppNavigator';
+import Txt from '../ui/Txt';
+import Button from '../ui/Button';
+import FocusStatusBar from '../ui/FocusStatusBar';
+import { colors, radius, spacing } from '../ui/theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ReceiptPreview'>;
 
-const { height: SH } = Dimensions.get('window');
+const CHECKS: { icon: keyof typeof Ionicons.glyphMap; label: string }[] = [
+  { icon: 'storefront-outline', label: 'Store name is visible' },
+  { icon: 'list-outline', label: 'Items and prices are sharp' },
+  { icon: 'cash-outline', label: 'Grand total is in frame' },
+];
 
 export default function ReceiptPreviewScreen({ navigation, route }: Props) {
+  const insets = useSafeAreaInsets();
   const { capturedImages } = route.params;
 
   // Display the most recently captured image (last in array).
@@ -24,116 +26,109 @@ export default function ReceiptPreviewScreen({ navigation, route }: Props) {
   // adding more pages to the same receipt session.
   const previewUri = capturedImages[capturedImages.length - 1];
 
-  const handleRetake = () => {
-    // Navigate back to CameraScreen without losing stack position
-    navigation.goBack();
-  };
-
-  const handleContinue = () => {
-    navigation.navigate('Processing', { capturedImages });
-  };
-
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Receipt image */}
-      <View style={styles.imageWrapper}>
-        <Image
-          source={{ uri: previewUri }}
-          style={styles.image}
-          resizeMode="contain"
-        />
+    <View style={styles.screen}>
+      <FocusStatusBar style="light" />
+      <View style={styles.imageArea}>
+        <Image source={{ uri: previewUri }} style={styles.image} resizeMode="contain" />
+        {capturedImages.length > 1 && (
+          <View style={styles.badge}>
+            <Txt variant="caption" color={colors.inkInverse}>
+              {capturedImages.length} pages captured
+            </Txt>
+          </View>
+        )}
       </View>
 
-      {/* Multi-image badge — visible when more than one page captured */}
-      {capturedImages.length > 1 && (
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>
-            {capturedImages.length} pages captured
-          </Text>
+      <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.xl) }]}>
+        <View style={styles.handle} />
+        <Txt variant="heading">Is everything readable?</Txt>
+        <Txt variant="caption" color={colors.inkSecondary} style={styles.sheetBody}>
+          Clear photos give the AI the best chance of reading every line.
+        </Txt>
+        <View style={styles.checks}>
+          {CHECKS.map((c) => (
+            <View key={c.label} style={styles.check}>
+              <Ionicons name={c.icon} size={16} color={colors.primary} />
+              <Txt variant="caption" color={colors.inkSecondary} style={styles.checkText}>
+                {c.label}
+              </Txt>
+            </View>
+          ))}
         </View>
-      )}
-
-      {/* Action row */}
-      <View style={styles.actionRow}>
-        <TouchableOpacity
-          style={styles.retakeBtn}
-          onPress={handleRetake}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="arrow-undo" size={16} color="#FFFFFF" style={styles.btnIcon} />
-          <Text style={styles.retakeBtnText}>Retake</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.continueBtn}
-          onPress={handleContinue}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.continueBtnText}>Continue</Text>
-          <Ionicons name="arrow-forward" size={18} color="#FFFFFF" style={styles.btnIcon} />
-        </TouchableOpacity>
+        <View style={styles.actions}>
+          <Button
+            title="Retake"
+            icon="camera-reverse-outline"
+            variant="secondary"
+            onPress={() => navigation.goBack()}
+            style={styles.retake}
+          />
+          <Button
+            title="Use photo"
+            iconRight="arrow-forward"
+            onPress={() => navigation.navigate('Processing', { capturedImages })}
+            style={styles.continue}
+          />
+        </View>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#1A1A2E' },
-
-  imageWrapper: {
+  screen: { flex: 1, backgroundColor: '#0B1220' },
+  imageArea: {
     flex: 1,
+    padding: spacing.xl,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 12,
   },
   image: {
     width: '100%',
-    height: SH * 0.62,
-    borderRadius: 12,
+    height: '100%',
+    borderRadius: radius.lg,
   },
-
   badge: {
-    alignSelf: 'center',
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    position: 'absolute',
+    top: spacing.xxl,
+    backgroundColor: 'rgba(255,255,255,0.14)',
     paddingHorizontal: 14,
     paddingVertical: 6,
-    borderRadius: 20,
-    marginBottom: 8,
+    borderRadius: radius.pill,
   },
-  badgeText: { color: 'rgba(255,255,255,0.75)', fontSize: 13 },
-
-  actionRow: {
+  sheet: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radius.xxl,
+    borderTopRightRadius: radius.xxl,
+    paddingHorizontal: spacing.xxl,
+    paddingTop: spacing.md,
+  },
+  handle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.border,
+    marginBottom: spacing.lg,
+  },
+  sheetBody: { marginTop: spacing.xs },
+  checks: {
     flexDirection: 'row',
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 32,
-    gap: 12,
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.lg,
   },
-  btnIcon: {
-    marginHorizontal: 6,
-  },
-  retakeBtn: {
-    flex: 1,
+  check: {
     flexDirection: 'row',
-    paddingVertical: 16,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.55)',
     alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: colors.primarySoft,
+    borderRadius: radius.pill,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
-  retakeBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' },
-
-  continueBtn: {
-    flex: 2,
-    flexDirection: 'row',
-    paddingVertical: 16,
-    borderRadius: 12,
-    backgroundColor: '#1B5E3B',
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 2,
-  },
-  continueBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
+  checkText: { marginLeft: 6 },
+  actions: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.xl },
+  retake: { flex: 1 },
+  continue: { flex: 1.4 },
 });

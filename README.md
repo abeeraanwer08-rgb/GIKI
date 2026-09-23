@@ -5,6 +5,29 @@ It helps users track expenses by analysing receipts and providing intelligent fi
 
 ---
 
+## Credits and contributions
+
+This project builds on the **KharchAI** codebase by
+[zara1990](https://github.com/zara1990/Kharchai), which provided the FastAPI
+document pipeline (receipt, utility-bill and wallet-screenshot parsing,
+validation, confidence scoring, review hints), Supabase persistence, and the
+original Expo mobile app (receipt capture, review and save flow). The original
+commit history is preserved in this repository.
+
+Work added on top of that base in this repository:
+
+- **AI financial reasoning layer** — deterministic spending calculations plus
+  LLM-generated insights, recommendations and grounded Q&A
+  (`GET /api/v1/insights`, `POST /api/v1/insights/ask`, ADR-0009).
+- **Saved-records API** — `GET /api/v1/financial-records` for the mobile app.
+- **Mobile design system** — theme tokens, Inter typography, and reusable UI
+  components (`mobile/app/ui/`).
+- **Redesigned mobile app** — bottom-tab navigation, a Home dashboard with
+  category breakdown and grouped activity, an Insights screen with a donut
+  chart and chat-style "Ask KharchAI", and a redesigned scan → review flow.
+
+---
+
 ## Current Milestone: Financial Calculations and AI Financial Reasoning
 
 The backend uses **Python + FastAPI** with a server-side Supabase foundation

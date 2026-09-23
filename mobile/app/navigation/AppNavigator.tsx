@@ -1,17 +1,25 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { NavigatorScreenParams } from '@react-navigation/native';
 import HomeScreen from '../screens/HomeScreen';
+import InsightsScreen from '../screens/InsightsScreen';
 import AddExpenseScreen from '../screens/AddExpenseScreen';
 import CameraScreen from '../screens/CameraScreen';
 import ReceiptPreviewScreen from '../screens/ReceiptPreviewScreen';
 import ProcessingScreen from '../screens/ProcessingScreen';
 import ReviewScreen from '../screens/ReviewScreen';
-import InsightsScreen from '../screens/InsightsScreen';
+import TabBar from './TabBar';
 import { UniversalFinancialRecord } from '../types/ufr';
+import { colors, fonts } from '../ui/theme';
 
-export type RootStackParamList = {
+export type TabParamList = {
   Home: undefined;
   Insights: undefined;
+};
+
+export type RootStackParamList = {
+  Main: NavigatorScreenParams<TabParamList> | undefined;
   AddExpense: undefined;
   Camera: undefined;
   ReceiptPreview: {
@@ -29,53 +37,59 @@ export type RootStackParamList = {
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
+const Tab = createBottomTabNavigator<TabParamList>();
+
+function MainTabs() {
+  return (
+    <Tab.Navigator
+      tabBar={(props) => <TabBar {...props} />}
+      screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.bg } }}
+    >
+      <Tab.Screen name="Home" component={HomeScreen} />
+      <Tab.Screen name="Insights" component={InsightsScreen} />
+    </Tab.Navigator>
+  );
+}
 
 export default function AppNavigator() {
   return (
     <Stack.Navigator
-      initialRouteName="Home"
+      initialRouteName="Main"
       screenOptions={{
-        headerStyle: { backgroundColor: '#1B5E3B' },
-        headerTintColor: '#FFFFFF',
-        headerTitleStyle: { fontWeight: '700' },
-        contentStyle: { backgroundColor: '#F8F9FA' },
+        headerStyle: { backgroundColor: colors.bg },
+        headerShadowVisible: false,
+        headerTintColor: colors.ink,
+        headerTitleStyle: { fontFamily: fonts.semibold, fontSize: 17 },
+        headerBackButtonDisplayMode: 'minimal',
+        contentStyle: { backgroundColor: colors.bg },
       }}
     >
-      <Stack.Screen
-        name="Home"
-        component={HomeScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="Insights"
-        component={InsightsScreen}
-        options={{ title: 'Insights' }}
-      />
+      <Stack.Screen name="Main" component={MainTabs} options={{ headerShown: false }} />
       <Stack.Screen
         name="AddExpense"
         component={AddExpenseScreen}
-        options={{ title: 'Add Expense' }}
+        options={{ title: 'Add expense' }}
       />
-      {/* Full-screen camera — no header, custom top bar */}
-      <Stack.Screen
-        name="Camera"
-        component={CameraScreen}
-        options={{ headerShown: false }}
-      />
+      <Stack.Screen name="Camera" component={CameraScreen} options={{ headerShown: false }} />
       <Stack.Screen
         name="ReceiptPreview"
         component={ReceiptPreviewScreen}
-        options={{ title: 'Receipt Preview', headerStyle: { backgroundColor: '#1A1A2E' } }}
+        options={{
+          title: 'Preview',
+          headerStyle: { backgroundColor: '#0B1220' },
+          headerTintColor: colors.inkInverse,
+          contentStyle: { backgroundColor: '#0B1220' },
+        }}
       />
       <Stack.Screen
         name="Processing"
         component={ProcessingScreen}
-        options={{ title: 'Processing', headerBackVisible: false }}
+        options={{ headerShown: false, gestureEnabled: false }}
       />
       <Stack.Screen
         name="Review"
         component={ReviewScreen}
-        options={{ title: 'Review' }}
+        options={{ title: 'Review details' }}
       />
     </Stack.Navigator>
   );

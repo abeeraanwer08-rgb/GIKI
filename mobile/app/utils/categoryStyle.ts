@@ -4,32 +4,45 @@ export type CategoryStyle = {
   icon: keyof typeof Ionicons.glyphMap;
   color: string;
   tint: string;
+  /** Brighter variant that stays legible on the dark brand gradient. */
+  onDark: string;
 };
 
 const CATEGORY_STYLES: Record<string, CategoryStyle> = {
-  groceries: { icon: 'cart', color: '#1B5E3B', tint: '#E3F3E9' },
-  restaurant: { icon: 'restaurant', color: '#D9782A', tint: '#FBEBDD' },
-  utilities: { icon: 'flash', color: '#B8860B', tint: '#FBF2DA' },
-  wallet: { icon: 'phone-portrait', color: '#2E6DB4', tint: '#E4EEFA' },
+  groceries: { icon: 'cart', color: '#0E7A4F', tint: '#E7F5EE', onDark: '#6EE7B7' },
+  restaurant: { icon: 'restaurant', color: '#EA580C', tint: '#FFF1E7', onDark: '#FDBA74' },
+  food: { icon: 'fast-food', color: '#EA580C', tint: '#FFF1E7', onDark: '#FDBA74' },
+  utilities: { icon: 'flash', color: '#D97706', tint: '#FEF6E4', onDark: '#FCD34D' },
+  wallet: { icon: 'phone-portrait', color: '#2563EB', tint: '#EEF4FF', onDark: '#93C5FD' },
+  transport: { icon: 'car', color: '#7C3AED', tint: '#F3EEFF', onDark: '#C4B5FD' },
+  shopping: { icon: 'bag-handle', color: '#DB2777', tint: '#FDEEF6', onDark: '#F9A8D4' },
 };
 
 const DOCUMENT_TYPE_STYLES: Record<string, CategoryStyle> = {
-  receipt: { icon: 'receipt', color: '#1B5E3B', tint: '#E3F3E9' },
-  utility_bill: { icon: 'flash', color: '#B8860B', tint: '#FBF2DA' },
-  wallet_screenshot: { icon: 'phone-portrait', color: '#2E6DB4', tint: '#E4EEFA' },
+  receipt: { icon: 'receipt', color: '#0E7A4F', tint: '#E7F5EE', onDark: '#6EE7B7' },
+  utility_bill: { icon: 'flash', color: '#D97706', tint: '#FEF6E4', onDark: '#FCD34D' },
+  wallet_screenshot: { icon: 'phone-portrait', color: '#2563EB', tint: '#EEF4FF', onDark: '#93C5FD' },
 };
 
-const DEFAULT_STYLE: CategoryStyle = { icon: 'card', color: '#6B7785', tint: '#EAEDF0' };
+const DEFAULT_STYLE: CategoryStyle = { icon: 'card', color: '#64748B', tint: '#F1F4F7', onDark: '#CBD5E1' };
 
 export function getCategoryStyle(
   category: string | null | undefined,
   documentType?: string | null,
 ): CategoryStyle {
-  if (category && CATEGORY_STYLES[category.toLowerCase()]) {
-    return CATEGORY_STYLES[category.toLowerCase()];
-  }
-  if (documentType && DOCUMENT_TYPE_STYLES[documentType]) {
-    return DOCUMENT_TYPE_STYLES[documentType];
-  }
+  const key = category?.toLowerCase();
+  if (key && CATEGORY_STYLES[key]) return CATEGORY_STYLES[key];
+  if (documentType && DOCUMENT_TYPE_STYLES[documentType]) return DOCUMENT_TYPE_STYLES[documentType];
   return DEFAULT_STYLE;
+}
+
+const DOCUMENT_TYPE_LABELS: Record<string, string> = {
+  receipt: 'Receipt',
+  utility_bill: 'Utility bill',
+  wallet_screenshot: 'Wallet transfer',
+};
+
+export function documentTypeLabel(documentType: string | null | undefined): string {
+  if (!documentType) return 'Document';
+  return DOCUMENT_TYPE_LABELS[documentType] ?? documentType.replace(/_/g, ' ');
 }

@@ -1,41 +1,55 @@
-import React, { useCallback, useState } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  SafeAreaView,
-  StatusBar,
-  FlatList,
-  ActivityIndicator,
-  RefreshControl,
-} from 'react-native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useFocusEffect } from '@react-navigation/native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { CompositeScreenProps, useFocusEffect } from '@react-navigation/native';
+import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { RootStackParamList } from '../navigation/AppNavigator';
+import { RootStackParamList, TabParamList } from '../navigation/AppNavigator';
 import { FinancialRecordSummary } from '../types/insights';
 import { fetchFinancialRecords } from '../services/insightsService';
 import TransactionRow from '../components/home/TransactionRow';
+import { getCategoryStyle } from '../utils/categoryStyle';
+import { capitalize, dayLabel, formatMoney, greeting, isSameMonth } from '../utils/format';
+import Txt from '../ui/Txt';
+import Card from '../ui/Card';
+import IconBadge from '../ui/IconBadge';
+import SectionHeader from '../ui/SectionHeader';
+import EmptyState from '../ui/EmptyState';
+import Skeleton from '../ui/Skeleton';
+import FocusStatusBar from '../ui/FocusStatusBar';
+import { colors, gradients, radius, spacing } from '../ui/theme';
 
-type HomeScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Home'>;
-
-interface Props {
-  navigation: HomeScreenNavigationProp;
-}
+type Props = CompositeScreenProps<
+  BottomTabScreenProps<TabParamList, 'Home'>,
+  NativeStackScreenProps<RootStackParamList>
+>;
 
 type LoadState = 'loading' | 'loaded' | 'error';
 
+type CategoryShare = { category: string; amount: number; share: number; color: string };
+
+function groupByDay(records: FinancialRecordSummary[]) {
+  const groups: { label: string; items: FinancialRecordSummary[] }[] = [];
+  for (const record of records) {
+    const label = dayLabel(record.transaction_date);
+    const last = groups[groups.length - 1];
+    if (last && last.label === label) last.items.push(record);
+    else groups.push({ label, items: [record] });
+  }
+  return groups;
+}
+
 export default function HomeScreen({ navigation }: Props) {
+  const insets = useSafeAreaInsets();
   const [records, setRecords] = useState<FinancialRecordSummary[]>([]);
   const [state, setState] = useState<LoadState>('loading');
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const result = await fetchFinancialRecords();
-      setRecords(result);
+      setRecords(await fetchFinancialRecords());
       setState('loaded');
     } catch {
       setState('error');
@@ -44,281 +58,339 @@ export default function HomeScreen({ navigation }: Props) {
     }
   }, []);
 
-  // Refetch every time Home regains focus (e.g. after saving an expense).
+  // Refetch whenever Home regains focus (e.g. after saving an expense).
   useFocusEffect(
     useCallback(() => {
       load();
     }, [load]),
   );
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    load();
-  };
-
-  const total = records.reduce((sum, r) => sum + (r.amount ?? 0), 0);
   const currency = records.find((r) => r.currency)?.currency ?? 'PKR';
+  const allTimeTotal = records.reduce((sum, r) => sum + (r.amount ?? 0), 0);
+  const monthTotal = records
+    .filter((r) => isSameMonth(r.transaction_date))
+    .reduce((sum, r) => sum + (r.amount ?? 0), 0);
+
+  const categoryShares = useMemo<CategoryShare[]>(() => {
+    const totals = new Map<string, number>();
+    for (const r of records) {
+      const key = r.category || 'other';
+      totals.set(key, (totals.get(key) ?? 0) + (r.amount ?? 0));
+    }
+    const sum = [...totals.values()].reduce((a, b) => a + b, 0);
+    return [...totals.entries()]
+      .map(([category, amount]) => ({
+        category,
+        amount,
+        share: sum > 0 ? amount / sum : 0,
+        color: getCategoryStyle(category).onDark,
+      }))
+      .sort((a, b) => b.amount - a.amount);
+  }, [records]);
+
+  const groups = useMemo(() => groupByDay(records), [records]);
+  const loading = state === 'loading';
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#164A30" />
-
-      {/* Header */}
-      <LinearGradient colors={['#1F6E45', '#164A30']} style={styles.header}>
-        <View style={styles.headerTop}>
-          <View>
-            <Text style={styles.appName}>KharchAI</Text>
-            <Text style={styles.tagline}>Your AI-powered financial copilot</Text>
-          </View>
-          <TouchableOpacity
-            style={styles.insightsButton}
-            onPress={() => navigation.navigate('Insights')}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="sparkles" size={14} color="#FFFFFF" style={styles.insightsIcon} />
-            <Text style={styles.insightsButtonText}>Insights</Text>
-          </TouchableOpacity>
-        </View>
-        {records.length > 0 && (
-          <View style={styles.totalCard}>
-            <View style={styles.totalIconBadge}>
-              <Ionicons name="wallet" size={18} color="#FFFFFF" />
-            </View>
-            <View>
-              <Text style={styles.totalLabel}>Total tracked</Text>
-              <Text style={styles.totalValue}>
-                {currency} {total.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-              </Text>
-            </View>
-          </View>
-        )}
-      </LinearGradient>
-
-      {/* Main content */}
-      <View style={styles.content}>
-        {state === 'loading' ? (
-          <View style={styles.centered}>
-            <ActivityIndicator color="#1B5E3B" size="large" />
-          </View>
-        ) : records.length === 0 ? (
-          <FlatList
-            data={[]}
-            renderItem={null}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-            ListEmptyComponent={
-              <View style={styles.emptyState}>
-                <View style={styles.emptyIconCircle}>
-                  <Ionicons
-                    name={state === 'error' ? 'cloud-offline' : 'receipt-outline'}
-                    size={36}
-                    color="#1B5E3B"
-                  />
-                </View>
-                <Text style={styles.emptyStateTitle}>
-                  {state === 'error' ? "Couldn't load your expenses" : 'No expenses yet'}
-                </Text>
-                <Text style={styles.emptyStateText}>
-                  {state === 'error'
-                    ? 'Pull down to try again, or check your connection.'
-                    : 'Your expenses will appear here once you start adding them. Track your spending in PKR with AI-powered receipt scanning.'}
-                </Text>
-              </View>
-            }
-            contentContainerStyle={styles.emptyListContent}
+    <View style={styles.screen}>
+      <FocusStatusBar style="light" />
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              load();
+            }}
+            tintColor={colors.inkInverse}
           />
-        ) : (
-          <>
-            <Text style={styles.sectionHeading}>Recent Transactions</Text>
-            <FlatList
-              data={records}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item }) => <TransactionRow record={item} />}
-              showsVerticalScrollIndicator={false}
-              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-              contentContainerStyle={styles.listContent}
-            />
-          </>
-        )}
-      </View>
-
-      {/* Footer CTA */}
-      <View style={styles.footer}>
-        <TouchableOpacity
-          onPress={() => navigation.navigate('AddExpense')}
-          activeOpacity={0.85}
-          style={styles.primaryButtonWrapper}
+        }
+      >
+        {/* ── Hero ─────────────────────────────────────────────── */}
+        <LinearGradient
+          colors={gradients.brand}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.hero, { paddingTop: insets.top + spacing.lg }]}
         >
-          <LinearGradient colors={['#1F6E45', '#164A30']} style={styles.primaryButton}>
-            <Ionicons name="add" size={20} color="#FFFFFF" style={styles.primaryButtonIcon} />
-            <Text style={styles.primaryButtonText}>Add Expense</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-        <Text style={styles.footerNote}>Track your spending in PKR</Text>
-      </View>
-    </SafeAreaView>
+          <View style={styles.brandRow}>
+            <View style={styles.brandMark}>
+              <Ionicons name="leaf" size={16} color={colors.inkInverse} />
+            </View>
+            <Txt variant="bodyStrong" color={colors.inkInverse}>
+              KharchAI
+            </Txt>
+            <View style={styles.flex} />
+            <Pressable
+              onPress={() => navigation.navigate('Insights')}
+              style={styles.heroIconButton}
+              accessibilityRole="button"
+          accessibilityLabel="Open insights"
+              hitSlop={8}
+            >
+              <Ionicons name="sparkles" size={18} color={colors.inkInverse} />
+            </Pressable>
+          </View>
+
+          <Txt variant="caption" color={colors.inkInverseMuted} style={styles.greeting}>
+            {greeting()}
+          </Txt>
+          <Txt variant="title" color={colors.inkInverse}>
+            Here’s your spending
+          </Txt>
+
+          <View style={styles.balanceCard}>
+            <Txt variant="overline" color={colors.inkInverseMuted}>
+              Spent this month
+            </Txt>
+            {loading ? (
+              <Skeleton width={180} height={38} style={styles.skeletonOnDark} />
+            ) : (
+              <Txt variant="display" color={colors.inkInverse} style={styles.balance}>
+                {formatMoney(monthTotal, currency)}
+              </Txt>
+            )}
+
+            {categoryShares.length > 0 && (
+              <>
+                <View style={styles.stackedBar}>
+                  {categoryShares.map((c) => (
+                    <View
+                      key={c.category}
+                      style={{ flex: Math.max(c.share, 0.02), backgroundColor: c.color }}
+                    />
+                  ))}
+                </View>
+                <View style={styles.legend}>
+                  {categoryShares.slice(0, 3).map((c) => (
+                    <View key={c.category} style={styles.legendItem}>
+                      <View style={[styles.legendDot, { backgroundColor: c.color }]} />
+                      <Txt variant="caption" color={colors.inkInverseMuted}>
+                        {capitalize(c.category)} {Math.round(c.share * 100)}%
+                      </Txt>
+                    </View>
+                  ))}
+                </View>
+              </>
+            )}
+
+            <View style={styles.statsRow}>
+              <View style={styles.stat}>
+                <Txt variant="caption" color={colors.inkInverseMuted}>
+                  All time
+                </Txt>
+                <Txt variant="bodyStrong" color={colors.inkInverse}>
+                  {loading ? '—' : formatMoney(allTimeTotal, currency)}
+                </Txt>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={styles.stat}>
+                <Txt variant="caption" color={colors.inkInverseMuted}>
+                  Records
+                </Txt>
+                <Txt variant="bodyStrong" color={colors.inkInverse}>
+                  {loading ? '—' : records.length}
+                </Txt>
+              </View>
+            </View>
+          </View>
+        </LinearGradient>
+
+        <View style={styles.body}>
+          {/* ── Quick actions ──────────────────────────────────── */}
+          <View style={styles.actions}>
+            <Pressable
+              style={({ pressed }) => [styles.actionPress, pressed && styles.pressed]}
+              onPress={() => navigation.navigate('Camera')}
+            >
+              <Card style={styles.actionCard}>
+                <IconBadge icon="scan" color={colors.primary} tint={colors.primarySoft} />
+                <Txt variant="bodyStrong" style={styles.actionTitle}>
+                  Scan receipt
+                </Txt>
+                <Txt variant="caption" color={colors.inkMuted}>
+                  AI reads it for you
+                </Txt>
+              </Card>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.actionPress, pressed && styles.pressed]}
+              onPress={() => navigation.navigate('Insights')}
+            >
+              <Card style={styles.actionCard}>
+                <IconBadge icon="sparkles" color={colors.warning} tint={colors.warningSoft} />
+                <Txt variant="bodyStrong" style={styles.actionTitle}>
+                  AI insights
+                </Txt>
+                <Txt variant="caption" color={colors.inkMuted}>
+                  Trends & advice
+                </Txt>
+              </Card>
+            </Pressable>
+          </View>
+
+          {/* ── Activity ───────────────────────────────────────── */}
+          <SectionHeader
+            title="Recent activity"
+            subtitle={
+              state === 'loaded' && records.length > 0
+                ? `${records.length} transaction${records.length === 1 ? '' : 's'}`
+                : undefined
+            }
+          />
+
+          {loading ? (
+            <Card>
+              {[0, 1, 2].map((i) => (
+                <View key={i} style={styles.skeletonRow}>
+                  <Skeleton width={42} height={42} rounded={13} />
+                  <View style={styles.skeletonText}>
+                    <Skeleton width="60%" height={14} />
+                    <Skeleton width="35%" height={11} style={styles.skeletonGap} />
+                  </View>
+                </View>
+              ))}
+            </Card>
+          ) : state === 'error' ? (
+            <Card>
+              <EmptyState
+                icon="cloud-offline"
+                tone="danger"
+                title="Couldn’t load your expenses"
+                body="Check your connection and try again."
+                actionLabel="Try again"
+                onAction={() => {
+                  setState('loading');
+                  load();
+                }}
+              />
+            </Card>
+          ) : records.length === 0 ? (
+            <Card>
+              <EmptyState
+                icon="receipt-outline"
+                title="No expenses yet"
+                body="Scan your first receipt and KharchAI will extract the merchant, items and total for you."
+                actionLabel="Scan your first receipt"
+                onAction={() => navigation.navigate('Camera')}
+              />
+            </Card>
+          ) : (
+            groups.map((group) => (
+              <View key={group.label} style={styles.group}>
+                <Txt variant="overline" color={colors.inkMuted} style={styles.groupLabel}>
+                  {group.label}
+                </Txt>
+                <Card padded={false}>
+                  {group.items.map((record, i) => (
+                    <TransactionRow
+                      key={record.id}
+                      record={record}
+                      isFirst={i === 0}
+                      isLast={i === group.items.length - 1}
+                    />
+                  ))}
+                </Card>
+              </View>
+            ))
+          )}
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#164A30',
+  screen: { flex: 1, backgroundColor: colors.bg },
+  flex: { flex: 1 },
+  scrollContent: { paddingBottom: spacing.xxl },
+  hero: {
+    paddingHorizontal: spacing.xxl,
+    paddingBottom: spacing.xxl,
+    borderBottomLeftRadius: radius.xxl,
+    borderBottomRightRadius: radius.xxl,
   },
-  header: {
-    paddingHorizontal: 24,
-    paddingTop: 32,
-    paddingBottom: 24,
-  },
-  headerTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  appName: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: 0.3,
-  },
-  tagline: {
-    fontSize: 13,
-    color: '#A8D5B8',
-    marginTop: 4,
-  },
-  insightsButton: {
+  brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    marginTop: 4,
+    gap: spacing.sm,
   },
-  insightsIcon: {
-    marginRight: 6,
-  },
-  insightsButtonText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  totalCard: {
-    marginTop: 24,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 18,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  totalIconBadge: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+  brandMark: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
     backgroundColor: 'rgba(255,255,255,0.16)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 14,
   },
-  totalLabel: {
-    fontSize: 11,
-    color: '#A8D5B8',
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-  },
-  totalValue: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    marginTop: 2,
-  },
-  content: {
-    flex: 1,
-    backgroundColor: '#F7F8FA',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: 24,
-    paddingTop: 24,
-  },
-  centered: {
-    flex: 1,
+  heroIconButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.14)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sectionHeading: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1A1A2E',
-    marginBottom: 12,
+  greeting: { marginTop: spacing.xxl },
+  balanceCard: {
+    marginTop: spacing.xl,
+    padding: spacing.xl,
+    borderRadius: radius.xl,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
   },
-  listContent: {
-    paddingBottom: 16,
-  },
-  emptyListContent: {
-    flexGrow: 1,
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingTop: 40,
-  },
-  emptyIconCircle: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: '#E3F3E9',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-  },
-  emptyStateTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1A1A2E',
-    marginBottom: 10,
-  },
-  emptyStateText: {
-    fontSize: 14,
-    color: '#8B94A0',
-    textAlign: 'center',
-    lineHeight: 22,
-    paddingHorizontal: 16,
-  },
-  footer: {
-    backgroundColor: '#F7F8FA',
-    paddingHorizontal: 24,
-    paddingBottom: 36,
-    paddingTop: 16,
-    alignItems: 'center',
-  },
-  primaryButtonWrapper: {
-    width: '100%',
-    borderRadius: 14,
-    shadowColor: '#164A30',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  primaryButton: {
+  balance: { marginTop: spacing.xs },
+  skeletonOnDark: { marginTop: spacing.sm, backgroundColor: 'rgba(255,255,255,0.2)' },
+  stackedBar: {
     flexDirection: 'row',
-    paddingVertical: 16,
-    borderRadius: 14,
-    width: '100%',
+    height: 8,
+    borderRadius: 4,
+    overflow: 'hidden',
+    gap: 2,
+    marginTop: spacing.lg,
+  },
+  legend: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    columnGap: spacing.lg,
+    rowGap: spacing.xs,
+    marginTop: spacing.md,
+  },
+  legendItem: { flexDirection: 'row', alignItems: 'center' },
+  legendDot: { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
+  statsRow: {
+    flexDirection: 'row',
+    marginTop: spacing.lg,
+    paddingTop: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.14)',
+  },
+  stat: { flex: 1 },
+  statDivider: {
+    width: 1,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    marginHorizontal: spacing.lg,
+  },
+  body: { paddingHorizontal: spacing.xl },
+  actions: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginTop: spacing.xl,
+  },
+  actionPress: { flex: 1 },
+  actionCard: { padding: spacing.lg },
+  actionTitle: { marginTop: spacing.md },
+  pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
+  group: { marginBottom: spacing.lg },
+  groupLabel: { marginBottom: spacing.sm, marginLeft: spacing.xs },
+  skeletonRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    paddingVertical: spacing.sm,
   },
-  primaryButtonIcon: {
-    marginRight: 6,
-  },
-  primaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
-  footerNote: {
-    marginTop: 12,
-    fontSize: 12,
-    color: '#AAAAAA',
-  },
+  skeletonText: { flex: 1, marginLeft: spacing.md },
+  skeletonGap: { marginTop: spacing.sm },
 });

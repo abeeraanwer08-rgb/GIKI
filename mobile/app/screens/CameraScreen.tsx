@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import {
   checkImageQuality,
@@ -58,7 +59,9 @@ export default function CameraScreen({ navigation }: Props) {
   if (!permission.granted) {
     return (
       <SafeAreaView style={styles.permissionScreen}>
-        <Text style={styles.permIcon}>📷</Text>
+        <View style={styles.permIconCircle}>
+          <Ionicons name="camera" size={34} color="#1B5E3B" />
+        </View>
         <Text style={styles.permTitle}>Camera Access Required</Text>
         <Text style={styles.permBody}>
           KharchAI needs your camera to scan receipts. Images stay on your
@@ -206,7 +209,7 @@ export default function CameraScreen({ navigation }: Props) {
       {/* Top bar — interactive */}
       <SafeAreaView style={styles.topBar} pointerEvents="box-none">
         <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.goBack()}>
-          <Text style={styles.iconBtnText}>✕</Text>
+          <Ionicons name="close" size={22} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.topTitle}>Scan Receipt</Text>
         {/* Spacer to balance title */}
@@ -249,8 +252,16 @@ export default function CameraScreen({ navigation }: Props) {
 
             {/* Warning icon row */}
             <View style={styles.warningIconRow}>
-              {hasBlur && <Text style={styles.warningIcon}>🌫️</Text>}
-              {hasDark && <Text style={styles.warningIcon}>🌑</Text>}
+              {hasBlur && (
+                <View style={styles.warningIconBadge}>
+                  <Ionicons name="scan-outline" size={22} color="#B8860B" />
+                </View>
+              )}
+              {hasDark && (
+                <View style={styles.warningIconBadge}>
+                  <Ionicons name="moon" size={22} color="#B8860B" />
+                </View>
+              )}
             </View>
 
             {/* Title */}
@@ -267,7 +278,8 @@ export default function CameraScreen({ navigation }: Props) {
               onPress={handleRetakeFromWarning}
               activeOpacity={0.85}
             >
-              <Text style={styles.modalRetakeBtnText}>↩  Retake</Text>
+              <Ionicons name="arrow-undo" size={16} color="#FFFFFF" style={styles.modalRetakeIcon} />
+              <Text style={styles.modalRetakeBtnText}>Retake</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -299,7 +311,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 32,
   },
-  permIcon: { fontSize: 64, marginBottom: 24 },
+  permIconCircle: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: '#E3F3E9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
   permTitle: {
     fontSize: 22,
     fontWeight: '700',
@@ -378,7 +398,6 @@ const styles = StyleSheet.create({
     paddingTop: 12,
   },
   iconBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  iconBtnText: { color: '#FFF', fontSize: 20, fontWeight: '600' },
   topTitle: { color: '#FFF', fontSize: 16, fontWeight: '700' },
 
   bottomBar: {
@@ -433,11 +452,18 @@ const styles = StyleSheet.create({
   },
   warningIconRow: {
     flexDirection: 'row',
-    gap: 6,
+    gap: 8,
     marginTop: 18,
     marginBottom: 4,
   },
-  warningIcon: { fontSize: 28 },
+  warningIconBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#FBF2DA',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   modalTitle: {
     fontSize: 18,
     fontWeight: '700',
@@ -460,14 +486,17 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   modalRetakeBtn: {
+    flexDirection: 'row',
     backgroundColor: '#1B5E3B',
     paddingVertical: 15,
     borderRadius: 12,
     width: '85%',
     alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 10,
     elevation: 2,
   },
+  modalRetakeIcon: { marginRight: 8 },
   modalRetakeBtnText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
   modalContinueBtn: {
     paddingVertical: 12,

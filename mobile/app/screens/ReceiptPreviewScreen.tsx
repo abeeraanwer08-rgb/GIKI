@@ -9,6 +9,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/AppNavigator';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ReceiptPreview'>;
@@ -59,7 +60,8 @@ export default function ReceiptPreviewScreen({ navigation, route }: Props) {
           onPress={handleRetake}
           activeOpacity={0.85}
         >
-          <Text style={styles.retakeBtnText}>↩  Retake</Text>
+          <Ionicons name="arrow-undo" size={16} color="#FFFFFF" style={styles.btnIcon} />
+          <Text style={styles.retakeBtnText}>Retake</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -67,7 +69,8 @@ export default function ReceiptPreviewScreen({ navigation, route }: Props) {
           onPress={handleContinue}
           activeOpacity={0.85}
         >
-          <Text style={styles.continueBtnText}>Continue  →</Text>
+          <Text style={styles.continueBtnText}>Continue</Text>
+          <Ionicons name="arrow-forward" size={18} color="#FFFFFF" style={styles.btnIcon} />
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -107,8 +110,12 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
     gap: 12,
   },
+  btnIcon: {
+    marginHorizontal: 6,
+  },
   retakeBtn: {
     flex: 1,
+    flexDirection: 'row',
     paddingVertical: 16,
     borderRadius: 12,
     borderWidth: 1.5,
@@ -120,6 +127,7 @@ const styles = StyleSheet.create({
 
   continueBtn: {
     flex: 2,
+    flexDirection: 'row',
     paddingVertical: 16,
     borderRadius: 12,
     backgroundColor: '#1B5E3B',

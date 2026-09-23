@@ -8,6 +8,7 @@ from schemas.financial_record import (
     to_summary,
 )
 from schemas.ufr import UniversalFinancialRecord
+from services.categorization import CategorizationService
 from services.financial_record_persistence import (
     FinancialRecordPersistenceService,
     FinancialRecordTotalMismatchWarning,
@@ -27,6 +28,7 @@ router = APIRouter(
 )
 
 _persistence_service = FinancialRecordPersistenceService()
+_categorizer = CategorizationService()
 
 
 def get_financial_record_persistence_service() -> FinancialRecordPersistenceService:
@@ -59,7 +61,9 @@ def list_financial_records(
             detail={"error": "Financial record persistence is unavailable."},
         ) from exc
 
-    return FinancialRecordListResponse(records=[to_summary(row) for row in rows])
+    return FinancialRecordListResponse(
+        records=[to_summary(row, _categorizer.categorize_row(row)) for row in rows]
+    )
 
 
 @router.post(
@@ -123,4 +127,5 @@ def save_financial_record(
         saved=True,
         record_id=record.record_id,
         document_type=record.document_type,
+        category=record.category,
     )

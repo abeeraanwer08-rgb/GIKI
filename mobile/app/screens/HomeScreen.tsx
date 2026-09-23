@@ -7,8 +7,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList, TabParamList } from '../navigation/AppNavigator';
-import { FinancialRecordSummary } from '../types/insights';
-import { fetchFinancialRecords } from '../services/insightsService';
+import { BudgetOverview, FinancialRecordSummary, MonthForecast } from '../types/insights';
+import { fetchBudgets, fetchFinancialRecords, fetchSummary } from '../services/insightsService';
 import TransactionRow from '../components/home/TransactionRow';
 import { getCategoryStyle } from '../utils/categoryStyle';
 import { capitalize, dayLabel, formatMoney, greeting, isSameMonth } from '../utils/format';
@@ -46,16 +46,25 @@ export default function HomeScreen({ navigation }: Props) {
   const [records, setRecords] = useState<FinancialRecordSummary[]>([]);
   const [state, setState] = useState<LoadState>('loading');
   const [refreshing, setRefreshing] = useState(false);
+  const [forecast, setForecast] = useState<MonthForecast | null>(null);
+  const [budgets, setBudgets] = useState<BudgetOverview | null>(null);
 
   const load = useCallback(async () => {
-    try {
-      setRecords(await fetchFinancialRecords());
+    // Forecast and budgets are extras: Home still works if either is unavailable.
+    const [recordsResult, summaryResult, budgetsResult] = await Promise.allSettled([
+      fetchFinancialRecords(),
+      fetchSummary(),
+      fetchBudgets(),
+    ]);
+    if (recordsResult.status === 'fulfilled') {
+      setRecords(recordsResult.value);
       setState('loaded');
-    } catch {
+    } else {
       setState('error');
-    } finally {
-      setRefreshing(false);
     }
+    setForecast(summaryResult.status === 'fulfilled' ? summaryResult.value.current_month : null);
+    setBudgets(budgetsResult.status === 'fulfilled' ? budgetsResult.value : null);
+    setRefreshing(false);
   }, []);
 
   // Refetch whenever Home regains focus (e.g. after saving an expense).
@@ -117,10 +126,10 @@ export default function HomeScreen({ navigation }: Props) {
         >
           <View style={styles.brandRow}>
             <View style={styles.brandMark}>
-              <Ionicons name="leaf" size={16} color={colors.inkInverse} />
+              <Ionicons name="calculator" size={16} color={colors.inkInverse} />
             </View>
             <Txt variant="bodyStrong" color={colors.inkInverse}>
-              KharchAI
+              HissabAI
             </Txt>
             <View style={styles.flex} />
             <Pressable
@@ -151,6 +160,14 @@ export default function HomeScreen({ navigation }: Props) {
               <Txt variant="display" color={colors.inkInverse} style={styles.balance}>
                 {formatMoney(monthTotal, currency)}
               </Txt>
+            )}
+            {forecast && forecast.projected_total > 0 && (
+              <View style={styles.forecastChip}>
+                <Ionicons name="trending-up" size={14} color={colors.gold} />
+                <Txt variant="caption" color={colors.inkInverse} style={styles.forecastText}>
+                  On pace for {formatMoney(forecast.projected_total, currency)} by month end
+                </Txt>
+              </View>
             )}
 
             {categoryShares.length > 0 && (
@@ -199,6 +216,31 @@ export default function HomeScreen({ navigation }: Props) {
         </LinearGradient>
 
         <View style={styles.body}>
+          {/* ── Budget alert ───────────────────────────────────── */}
+          {budgets && budgets.alerts > 0 && (
+            <Pressable
+              onPress={() => navigation.navigate('Budgets')}
+              style={({ pressed }) => [pressed && styles.pressed]}
+              accessibilityRole="button"
+            >
+              <Card style={styles.alertCard}>
+                <IconBadge icon="alert-circle" color={colors.warning} tint={colors.surface} size={40} />
+                <View style={styles.alertText}>
+                  <Txt variant="bodyStrong">
+                    {budgets.alerts} {budgets.alerts === 1 ? 'budget needs' : 'budgets need'} attention
+                  </Txt>
+                  <Txt variant="caption" color={colors.inkSecondary} numberOfLines={1}>
+                    {budgets.budgets
+                      .filter((b) => b.status !== 'on_track')
+                      .map((b) => `${capitalize(b.category)} ${Math.round(b.percent_used)}%`)
+                      .join(' · ')}
+                  </Txt>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.warning} />
+              </Card>
+            </Pressable>
+          )}
+
           {/* ── Quick actions ──────────────────────────────────── */}
           <View style={styles.actions}>
             <Pressable
@@ -217,15 +259,15 @@ export default function HomeScreen({ navigation }: Props) {
             </Pressable>
             <Pressable
               style={({ pressed }) => [styles.actionPress, pressed && styles.pressed]}
-              onPress={() => navigation.navigate('Insights')}
+              onPress={() => navigation.navigate('Assistant')}
             >
               <Card style={styles.actionCard}>
-                <IconBadge icon="sparkles" color={colors.warning} tint={colors.warningSoft} />
+                <IconBadge icon="chatbubbles" color={colors.info} tint={colors.infoSoft} />
                 <Txt variant="bodyStrong" style={styles.actionTitle}>
-                  AI insights
+                  Ask HissabAI
                 </Txt>
                 <Txt variant="caption" color={colors.inkMuted}>
-                  Trends & advice
+                  English · اردو
                 </Txt>
               </Card>
             </Pressable>
@@ -272,7 +314,7 @@ export default function HomeScreen({ navigation }: Props) {
               <EmptyState
                 icon="receipt-outline"
                 title="No expenses yet"
-                body="Scan your first receipt and KharchAI will extract the merchant, items and total for you."
+                body="Scan your first receipt and HissabAI will extract the merchant, items and total for you."
                 actionLabel="Scan your first receipt"
                 onAction={() => navigation.navigate('Camera')}
               />
@@ -343,6 +385,25 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.16)',
   },
   balance: { marginTop: spacing.xs },
+  forecastChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginTop: spacing.sm,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+  },
+  forecastText: { marginLeft: 6 },
+  alertCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.xl,
+    padding: spacing.lg,
+    backgroundColor: colors.warningSoft,
+  },
+  alertText: { flex: 1, marginHorizontal: spacing.md },
   skeletonOnDark: { marginTop: spacing.sm, backgroundColor: 'rgba(255,255,255,0.2)' },
   stackedBar: {
     flexDirection: 'row',
@@ -378,7 +439,7 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     gap: spacing.md,
-    marginTop: spacing.xl,
+    marginTop: spacing.lg,
   },
   actionPress: { flex: 1 },
   actionCard: { padding: spacing.lg },

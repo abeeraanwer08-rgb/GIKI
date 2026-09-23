@@ -1,5 +1,5 @@
 /**
- * KharchAI backend API configuration.
+ * HissabAI backend API configuration.
  *
  * API_BASE_URL must point to the running FastAPI backend.
  * In the Replit development environment this is the external dev-domain URL;

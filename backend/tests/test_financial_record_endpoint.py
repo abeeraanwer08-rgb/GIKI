@@ -395,6 +395,7 @@ class FinancialRecordEndpointTests(unittest.TestCase):
                 "saved": True,
                 "record_id": "record-1",
                 "document_type": "receipt",
+                "category": "groceries",
             },
         )
         self.assertEqual(self.client.payloads[0]["id"], "record-1")
@@ -494,6 +495,31 @@ class FinancialRecordEndpointTests(unittest.TestCase):
             response.json()["detail"],
             {"error": "Financial record persistence is unavailable."},
         )
+
+    # ── Auto-categorisation ──────────────────────────────────────────────────
+
+    def test_record_without_category_is_auto_categorised_on_save(self):
+        record = make_record(record_id="auto-1", merchant="K-Electric", total_amount=450.5)
+        record.category = None
+        response = self.post_record(record)
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()["category"], "utilities")
+        self.assertEqual(self.client.payloads[0]["category"], "utilities")
+        self.assertEqual(self.client.payloads[0]["metadata"]["category_source"], "merchant")
+
+    def test_user_chosen_category_is_kept(self):
+        record = make_record(record_id="user-1", merchant="K-Electric", category="health")
+        response = self.post_record(record)
+        self.assertEqual(response.json()["category"], "health")
+        self.assertEqual(self.client.payloads[0]["metadata"]["category_source"], "user")
+
+    def test_list_backfills_category_for_older_records(self):
+        self.client.records = [
+            {"id": "old-1", "document_type": "receipt", "merchant_provider": "Cheezious",
+             "transaction_date": "2026-08-01", "amount": 900.0, "currency": "PKR", "category": None}
+        ]
+        body = self.http.get("/api/v1/financial-records").json()
+        self.assertEqual(body["records"][0]["category"], "restaurant")
 
     # ── GET /api/v1/financial-records ────────────────────────────────────────
 

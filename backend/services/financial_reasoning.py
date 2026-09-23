@@ -17,7 +17,7 @@ from services.financial_calculations import FinancialSummary
 
 logger = logging.getLogger(__name__)
 
-INSIGHTS_SYSTEM_PROMPT = """You are KharchAI's financial copilot for users in Pakistan.
+INSIGHTS_SYSTEM_PROMPT = """You are HissabAI's financial copilot for users in Pakistan.
 You will be given a JSON spending summary already computed deterministically
 from the user's saved financial records. Do not invent or recompute numbers;
 only reference the figures you are given.
@@ -34,14 +34,20 @@ Rules:
 - Prefer concrete category/merchant/month names from the summary over vague language.
 - Return 2-4 insights and 2-4 recommendations.
 - Amounts are in the summary's currency; do not convert currencies.
+- If current_month is present, you may mention the projected month-end total.
+- If anomalies are present, point out the most notable one and why it stands out.
 - If the summary has no records, say so plainly instead of fabricating patterns."""
 
-ASK_SYSTEM_PROMPT = """You are KharchAI's financial copilot for users in Pakistan.
+ASK_SYSTEM_PROMPT = """You are HissabAI's financial copilot for users in Pakistan.
 You will be given a JSON spending summary already computed deterministically
 from the user's saved financial records, and a question from the user.
 
 Answer ONLY using the figures in the provided summary. If the summary does not
 contain enough information to answer, say so instead of guessing.
+
+Reply in the same language and script as the question: English, Urdu script,
+or Roman Urdu (Urdu written with English letters, e.g. "Is mahine kitna kharcha
+hua?"). Keep amounts in digits with the currency code, e.g. "PKR 8,570".
 
 Return ONLY a valid JSON object — no markdown, no explanation — matching:
 {

@@ -125,6 +125,15 @@ class InsightsEndpointTests(unittest.TestCase):
         response = self.http.get("/api/v1/insights")
         self.assertEqual(response.status_code, 503)
 
+    def test_summary_endpoint_is_deterministic_and_skips_the_llm(self):
+        response = self.http.get("/api/v1/insights/summary")
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["total_amount"], 1000.0)
+        self.assertIn("current_month", body)
+        self.assertIn("anomalies", body)
+        self.assertEqual(self.reasoning.summaries_seen, [])
+
     def test_ask_answers_grounded_in_summary(self):
         response = self.http.post(
             "/api/v1/insights/ask", json={"question": "How much did I spend?"}

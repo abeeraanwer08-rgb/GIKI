@@ -57,3 +57,10 @@ export function greeting(now: Date = new Date()): string {
 export function capitalize(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
+
+/** "2026-09" → "September". */
+export function monthName(month: string): string {
+  const parsed = new Date(`${month}-01T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return month;
+  return parsed.toLocaleDateString('en-US', { month: 'long' });
+}

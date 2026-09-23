@@ -211,7 +211,8 @@ export interface SaveRecordPayload {
   currency: string | null;
   total_amount: number | null;
   payment_method: null;
-  category: null;
+  /** null lets the backend auto-categorise from the merchant and items. */
+  category: string | null;
   items: UFRItemPayload[];
   metadata: UFRMetadataPayload;
 }
@@ -220,6 +221,7 @@ export interface SaveRecordResponse {
   saved: boolean;
   record_id: string;
   document_type: string;
+  category?: string | null;
 }
 
 export class SaveError extends Error {

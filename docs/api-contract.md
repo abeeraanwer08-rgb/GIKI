@@ -1,4 +1,4 @@
-# KharchAI — API Contract
+# HissabAI — API Contract
 
 ## Implemented Endpoints
 
@@ -69,9 +69,13 @@ endpoint does not accept images, invoke OpenAI, or rerun document parsing.
 {
   "saved": true,
   "record_id": "receipt-2026-08-12-001",
-  "document_type": "receipt"
+  "document_type": "receipt",
+  "category": "groceries"
 }
 ```
+
+When `category` is omitted or null, HissabAI assigns one from the document
+type, merchant and item descriptions (see ADR-0010).
 
 Returns HTTP 409 when the record ID already exists, HTTP 422 for an invalid
 UFR or unreconciled submitted total, and HTTP 503 when persistence is
@@ -164,6 +168,76 @@ spending summary used by `GET /api/v1/insights`.
 
 Returns HTTP 422 for a blank question and HTTP 503 when Supabase or OpenAI
 is unavailable.
+
+---
+
+### GET /api/v1/insights/summary
+
+The deterministic summary only — no LLM call. Includes everything in
+`summary` above plus:
+
+```json
+{
+  "current_month": {
+    "month": "2026-09",
+    "spent_to_date": 20540.0,
+    "days_elapsed": 23,
+    "days_in_month": 30,
+    "projected_total": 26791.3
+  },
+  "anomalies": [
+    {
+      "record_id": "r7",
+      "merchant": "Fancy Grill",
+      "category": "restaurant",
+      "amount": 4500.0,
+      "typical_amount": 1420.0,
+      "ratio": 3.2,
+      "transaction_date": "2026-09-21"
+    }
+  ]
+}
+```
+
+---
+
+### GET /api/v1/budgets
+
+This month's spending against each category budget.
+
+```json
+{
+  "month": "2026-09",
+  "currency": "PKR",
+  "total_limit": 25000.0,
+  "total_spent": 19640.0,
+  "alerts": 2,
+  "budgets": [
+    {
+      "category": "utilities",
+      "monthly_limit": 6000.0,
+      "spent": 6200.0,
+      "remaining": -200.0,
+      "percent_used": 103.3,
+      "status": "over"
+    }
+  ]
+}
+```
+
+`status` is `on_track` (< 80%), `warning` (≥ 80%) or `over` (≥ 100%).
+
+### PUT /api/v1/budgets/{category}
+
+Body `{"monthly_limit": 10000}`. Creates or replaces the budget and returns
+the updated overview. HTTP 422 for an unknown category or a non-positive
+limit.
+
+### DELETE /api/v1/budgets/{category}
+
+Removes the budget and returns the updated overview.
+
+All budget endpoints return HTTP 503 when storage is unavailable.
 
 ---
 

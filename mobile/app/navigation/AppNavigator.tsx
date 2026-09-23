@@ -4,6 +4,8 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigatorScreenParams } from '@react-navigation/native';
 import HomeScreen from '../screens/HomeScreen';
 import InsightsScreen from '../screens/InsightsScreen';
+import BudgetsScreen from '../screens/BudgetsScreen';
+import AssistantScreen from '../screens/AssistantScreen';
 import AddExpenseScreen from '../screens/AddExpenseScreen';
 import CameraScreen from '../screens/CameraScreen';
 import ReceiptPreviewScreen from '../screens/ReceiptPreviewScreen';
@@ -15,7 +17,9 @@ import { colors, fonts } from '../ui/theme';
 
 export type TabParamList = {
   Home: undefined;
+  Budgets: undefined;
   Insights: undefined;
+  Assistant: undefined;
 };
 
 export type RootStackParamList = {
@@ -46,7 +50,9 @@ function MainTabs() {
       screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.bg } }}
     >
       <Tab.Screen name="Home" component={HomeScreen} />
+      <Tab.Screen name="Budgets" component={BudgetsScreen} />
       <Tab.Screen name="Insights" component={InsightsScreen} />
+      <Tab.Screen name="Assistant" component={AssistantScreen} />
     </Tab.Navigator>
   );
 }

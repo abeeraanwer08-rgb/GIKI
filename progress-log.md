@@ -167,3 +167,25 @@
 - Added `accessibilityRole` to icon-only buttons.
 - Verified every screen visually via a local Expo web preview with sample
   data; preview-only scaffolding was removed before committing.
+## HissabAI: Categorisation, Budgets, Forecast and Bilingual Assistant
+
+- Renamed the app to **HissabAI** (app name, package id, UI copy, API title),
+  keeping credit to the original KharchAI codebase in the README.
+- Added a rule-based `CategorizationService` for Pakistani merchants and
+  items. Records saved without a category are categorised on save (source
+  stored in `metadata.category_source`); older uncategorised records are
+  categorised on read. The Review screen gained an "Auto-detect" / manual
+  category picker, and the save response now returns the category.
+- Added monthly category budgets: `budgets` table migration, Supabase
+  client upsert/delete, `BudgetService` (on_track / warning ≥ 80% / over ≥ 100%),
+  and `GET/PUT/DELETE /api/v1/budgets`. New Budgets tab with add/edit sheet;
+  Home shows a budget-alert banner.
+- Extended `FinancialSummary` with a month-end forecast and unusual-spending
+  detection (≥ 2× the category median), exposed LLM-free via
+  `GET /api/v1/insights/summary`. Shown on Home (forecast chip) and Insights
+  (forecast card, "Unusual spending" card).
+- Assistant prompt now replies in the question's language (English, Urdu
+  script, Roman Urdu). New Assistant tab with bilingual suggestions; the Ask
+  box moved there from Insights.
+- Four-tab navigation: Home, Budgets, Insights, Assistant.
+- 21 new backend tests (66 total). Added ADR-0010.

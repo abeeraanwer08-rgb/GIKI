@@ -15,7 +15,9 @@ type TabMeta = {
 
 const TABS: Record<string, TabMeta> = {
   Home: { label: 'Home', icon: 'home-outline', iconActive: 'home' },
-  Insights: { label: 'Insights', icon: 'sparkles-outline', iconActive: 'sparkles' },
+  Budgets: { label: 'Budgets', icon: 'pie-chart-outline', iconActive: 'pie-chart' },
+  Insights: { label: 'Insights', icon: 'stats-chart-outline', iconActive: 'stats-chart' },
+  Assistant: { label: 'Assistant', icon: 'chatbubbles-outline', iconActive: 'chatbubbles' },
 };
 
 export default function TabBar({ state, navigation }: BottomTabBarProps) {
@@ -53,8 +55,10 @@ export default function TabBar({ state, navigation }: BottomTabBarProps) {
     <View style={[styles.wrapper, { paddingBottom: Math.max(insets.bottom, 12) }]}>
       <View style={styles.bar}>
         {renderTab(0)}
-        <View style={styles.fabSlot} />
         {renderTab(1)}
+        <View style={styles.fabSlot} />
+        {renderTab(2)}
+        {renderTab(3)}
       </View>
       <Pressable
         onPress={() => navigation.navigate('AddExpense')}
@@ -82,6 +86,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     height: 64,
+    paddingHorizontal: 4,
     backgroundColor: colors.surface,
     borderRadius: radius.xxl,
     ...shadow.card,
@@ -98,7 +103,7 @@ const styles = StyleSheet.create({
     textTransform: 'none',
   },
   fabSlot: {
-    width: FAB + 16,
+    width: FAB + 8,
   },
   fab: {
     position: 'absolute',

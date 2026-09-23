@@ -1,4 +1,5 @@
 import unittest
+from datetime import date
 
 from services.financial_calculations import FinancialCalculationsService
 
@@ -60,10 +61,14 @@ class FinancialCalculationsServiceTests(unittest.TestCase):
         self.assertEqual(top_merchant.category, "K-Electric")
         self.assertEqual(top_merchant.total_amount, 1000.0)
 
-    def test_missing_category_falls_back_to_uncategorized(self):
-        records = [{"amount": 100.0, "category": None}]
+    def test_missing_category_is_derived_or_falls_back_to_other(self):
+        records = [
+            {"amount": 100.0, "category": None},
+            {"amount": 50.0, "category": None, "merchant_provider": "Cheezious"},
+        ]
         summary = self.service.summarize(records)
-        self.assertEqual(summary.by_category[0].category, "uncategorized")
+        by_category = {row.category: row.total_amount for row in summary.by_category}
+        self.assertEqual(by_category, {"other": 100.0, "restaurant": 50.0})
 
     def test_records_without_amount_are_skipped_but_not_dropped_from_input(self):
         records = [
@@ -88,6 +93,42 @@ class FinancialCalculationsServiceTests(unittest.TestCase):
         self.assertEqual(len(summary.top_merchants), 5)
         # Highest amount first.
         self.assertEqual(summary.top_merchants[0].category, "Merchant 6")
+
+    def test_forecast_projects_month_to_date_spending_to_month_end(self):
+        records = [
+            {"amount": 3000.0, "transaction_date": "2026-09-05"},
+            {"amount": 3000.0, "transaction_date": "2026-09-09"},
+            {"amount": 9999.0, "transaction_date": "2026-08-30"},  # previous month
+        ]
+        summary = self.service.summarize(records, today=date(2026, 9, 10))
+        forecast = summary.current_month
+        self.assertEqual(forecast.month, "2026-09")
+        self.assertEqual(forecast.spent_to_date, 6000.0)
+        self.assertEqual((forecast.days_elapsed, forecast.days_in_month), (10, 30))
+        self.assertEqual(forecast.projected_total, 18000.0)
+
+    def test_no_forecast_without_records(self):
+        self.assertIsNone(self.service.summarize([], today=date(2026, 9, 10)).current_month)
+
+    def test_anomaly_flags_spend_far_above_category_median(self):
+        records = [
+            {"id": "a", "amount": 1000.0, "category": "restaurant", "merchant_provider": "Cafe A"},
+            {"id": "b", "amount": 1200.0, "category": "restaurant", "merchant_provider": "Cafe B"},
+            {"id": "c", "amount": 900.0, "category": "restaurant", "merchant_provider": "Cafe C"},
+            {"id": "d", "amount": 4500.0, "category": "restaurant", "merchant_provider": "Fancy Grill"},
+        ]
+        anomalies = self.service.summarize(records).anomalies
+        self.assertEqual(len(anomalies), 1)
+        self.assertEqual(anomalies[0].record_id, "d")
+        self.assertEqual(anomalies[0].typical_amount, 1000.0)
+        self.assertEqual(anomalies[0].ratio, 4.5)
+
+    def test_anomalies_need_enough_history_in_the_category(self):
+        records = [
+            {"amount": 100.0, "category": "health"},
+            {"amount": 5000.0, "category": "health"},
+        ]
+        self.assertEqual(self.service.summarize(records).anomalies, [])
 
     def test_records_without_date_are_excluded_from_monthly_breakdown(self):
         records = [{"amount": 100.0, "transaction_date": None}]

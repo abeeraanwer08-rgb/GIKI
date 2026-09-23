@@ -78,8 +78,8 @@ export default function CameraScreen({ navigation }: Props) {
           title="Camera access needed"
           body={
             permission.canAskAgain
-              ? 'KharchAI uses your camera to scan receipts. Photos are only uploaded when you choose to continue.'
-              : 'Camera access was denied. Enable it for KharchAI in your device Settings to scan receipts.'
+              ? 'HissabAI uses your camera to scan receipts. Photos are only uploaded when you choose to continue.'
+              : 'Camera access was denied. Enable it for HissabAI in your device Settings to scan receipts.'
           }
         />
         {permission.canAskAgain ? (

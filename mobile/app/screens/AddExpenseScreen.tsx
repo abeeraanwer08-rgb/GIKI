@@ -14,7 +14,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'AddExpense'>;
 const TIPS: { icon: keyof typeof Ionicons.glyphMap; title: string; body: string }[] = [
   { icon: 'sunny-outline', title: 'Use good lighting', body: 'Avoid shadows and glare on the paper.' },
   { icon: 'crop-outline', title: 'Fit the whole receipt', body: 'Keep all four edges inside the frame.' },
-  { icon: 'hand-left-outline', title: 'Hold steady', body: 'KharchAI warns you if the photo is blurry.' },
+  { icon: 'hand-left-outline', title: 'Hold steady', body: 'HissabAI warns you if the photo is blurry.' },
 ];
 
 export default function AddExpenseScreen({ navigation }: Props) {
@@ -22,7 +22,7 @@ export default function AddExpenseScreen({ navigation }: Props) {
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Txt variant="title">How would you like to add it?</Txt>
       <Txt variant="body" color={colors.inkSecondary} style={styles.subtitle}>
-        Scan a receipt and KharchAI’s AI fills in the merchant, items and total for you.
+        Scan a receipt and HissabAI’s AI fills in the merchant, items and total for you.
       </Txt>
 
       <Pressable

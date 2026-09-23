@@ -16,7 +16,23 @@ const CATEGORY_STYLES: Record<string, CategoryStyle> = {
   wallet: { icon: 'phone-portrait', color: '#2563EB', tint: '#EEF4FF', onDark: '#93C5FD' },
   transport: { icon: 'car', color: '#7C3AED', tint: '#F3EEFF', onDark: '#C4B5FD' },
   shopping: { icon: 'bag-handle', color: '#DB2777', tint: '#FDEEF6', onDark: '#F9A8D4' },
+  health: { icon: 'medkit', color: '#DC2626', tint: '#FEF2F2', onDark: '#FCA5A5' },
+  mobile: { icon: 'cellular', color: '#0891B2', tint: '#E6F7FB', onDark: '#67E8F9' },
+  other: { icon: 'ellipsis-horizontal', color: '#64748B', tint: '#F1F4F7', onDark: '#CBD5E1' },
 };
+
+/** Categories the backend understands (mirrors services/categorization.py). */
+export const CATEGORIES = [
+  'groceries',
+  'restaurant',
+  'utilities',
+  'transport',
+  'shopping',
+  'health',
+  'mobile',
+  'wallet',
+  'other',
+] as const;
 
 const DOCUMENT_TYPE_STYLES: Record<string, CategoryStyle> = {
   receipt: { icon: 'receipt', color: '#0E7A4F', tint: '#E7F5EE', onDark: '#6EE7B7' },

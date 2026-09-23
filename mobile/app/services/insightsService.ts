@@ -1,7 +1,9 @@
 import { API_BASE_URL } from '../config/api';
 import {
   AskResponse,
+  BudgetOverview,
   FinancialRecordSummary,
+  FinancialSummary,
   InsightsResponse,
 } from '../types/insights';
 
@@ -48,5 +50,28 @@ export async function askInsights(question: string): Promise<AskResponse> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ question }),
+  });
+}
+
+/** Deterministic summary (forecast, anomalies, breakdowns) — no LLM call, cheap to refresh. */
+export async function fetchSummary(): Promise<FinancialSummary> {
+  return getJson<FinancialSummary>('/api/v1/insights/summary');
+}
+
+export async function fetchBudgets(): Promise<BudgetOverview> {
+  return getJson<BudgetOverview>('/api/v1/budgets');
+}
+
+export async function setBudget(category: string, monthlyLimit: number): Promise<BudgetOverview> {
+  return getJson<BudgetOverview>(`/api/v1/budgets/${encodeURIComponent(category)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ monthly_limit: monthlyLimit }),
+  });
+}
+
+export async function deleteBudget(category: string): Promise<BudgetOverview> {
+  return getJson<BudgetOverview>(`/api/v1/budgets/${encodeURIComponent(category)}`, {
+    method: 'DELETE',
   });
 }

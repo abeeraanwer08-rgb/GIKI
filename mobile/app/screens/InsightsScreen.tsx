@@ -1,13 +1,5 @@
-import React, { useCallback, useRef, useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  TextInput,
-  View,
-} from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { CompositeScreenProps, useFocusEffect } from '@react-navigation/native';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -16,10 +8,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList, TabParamList } from '../navigation/AppNavigator';
 import { InsightsResponse } from '../types/insights';
-import { askInsights, ApiError, fetchInsights } from '../services/insightsService';
-import ChatBubble, { ChatMessage } from '../components/insights/ChatBubble';
+import { fetchInsights } from '../services/insightsService';
 import { getCategoryStyle } from '../utils/categoryStyle';
-import { capitalize, formatMoney } from '../utils/format';
+import { capitalize, formatMoney, formatShortDate, monthName } from '../utils/format';
 import Txt from '../ui/Txt';
 import Card from '../ui/Card';
 import IconBadge from '../ui/IconBadge';
@@ -27,6 +18,7 @@ import SectionHeader from '../ui/SectionHeader';
 import EmptyState from '../ui/EmptyState';
 import Skeleton from '../ui/Skeleton';
 import DonutChart from '../ui/DonutChart';
+import Button from '../ui/Button';
 import FocusStatusBar from '../ui/FocusStatusBar';
 import { colors, fonts, gradients, radius, spacing } from '../ui/theme';
 
@@ -37,22 +29,11 @@ type Props = CompositeScreenProps<
 
 type LoadState = 'loading' | 'loaded' | 'empty' | 'error';
 
-const SUGGESTIONS = [
-  'What did I spend the most on?',
-  'How much went to groceries?',
-  'Any bills I should watch?',
-];
 
 export default function InsightsScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
-  const scrollRef = useRef<ScrollView>(null);
-  const nextId = useRef(0);
-
   const [data, setData] = useState<InsightsResponse | null>(null);
   const [state, setState] = useState<LoadState>('loading');
-  const [question, setQuestion] = useState('');
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const asking = messages.some((m) => m.role === 'pending');
 
   const load = useCallback(async () => {
     setState('loading');
@@ -70,37 +51,6 @@ export default function InsightsScreen({ navigation }: Props) {
       load();
     }, [load]),
   );
-
-  const ask = async (text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed || asking) return;
-
-    const pendingId = nextId.current + 1;
-    nextId.current += 2;
-    setQuestion('');
-    setMessages((prev) => [
-      ...prev,
-      { id: pendingId - 1, role: 'user', text: trimmed },
-      { id: pendingId, role: 'pending', text: '' },
-    ]);
-
-    let reply: ChatMessage;
-    try {
-      const result = await askInsights(trimmed);
-      reply = { id: pendingId, role: 'assistant', text: result.answer };
-    } catch (error) {
-      reply = {
-        id: pendingId,
-        role: 'error',
-        text:
-          error instanceof ApiError && error.status === 503
-            ? 'AI insights are temporarily unavailable. Please try again shortly.'
-            : 'Could not get an answer. Check your connection and try again.',
-      };
-    }
-    setMessages((prev) => prev.map((m) => (m.id === pendingId ? reply : m)));
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
-  };
 
   const header = (
     <View style={styles.header}>
@@ -159,6 +109,7 @@ export default function InsightsScreen({ navigation }: Props) {
     const categories = [...summary.by_category].sort((a, b) => b.total_amount - a.total_amount);
     const average = summary.record_count > 0 ? summary.total_amount / summary.record_count : 0;
     const topMerchant = summary.top_merchants[0]?.category ?? '—';
+    const forecast = summary.current_month;
     const segments = categories.map((c) => ({
       key: c.category,
       value: c.total_amount,
@@ -184,6 +135,35 @@ export default function InsightsScreen({ navigation }: Props) {
             {headline}
           </Txt>
         </LinearGradient>
+
+        {/* ── Month-end forecast ──────────────────────────── */}
+        {forecast && (
+          <Card style={styles.forecast}>
+            <View style={styles.forecastTop}>
+              <IconBadge icon="trending-up" color={colors.info} tint={colors.infoSoft} size={38} />
+              <View style={styles.forecastText}>
+                <Txt variant="caption" color={colors.inkMuted}>
+                  {monthName(forecast.month)} forecast
+                </Txt>
+                <Txt variant="heading">
+                  On pace for {formatMoney(forecast.projected_total, summary.currency)}
+                </Txt>
+              </View>
+            </View>
+            <View style={styles.forecastTrack}>
+              <View
+                style={[
+                  styles.forecastFill,
+                  { width: `${Math.round((forecast.days_elapsed / forecast.days_in_month) * 100)}%` },
+                ]}
+              />
+            </View>
+            <Txt variant="caption" color={colors.inkSecondary} style={styles.forecastMeta}>
+              {formatMoney(forecast.spent_to_date, summary.currency)} spent in {forecast.days_elapsed} of{' '}
+              {forecast.days_in_month} days
+            </Txt>
+          </Card>
+        )}
 
         {/* ── Stat tiles ───────────────────────────────────── */}
         <View style={styles.tiles}>
@@ -256,6 +236,32 @@ export default function InsightsScreen({ navigation }: Props) {
           </>
         )}
 
+        {/* ── Unusual spending ────────────────────────────── */}
+        {summary.anomalies.length > 0 && (
+          <>
+            <SectionHeader title="Unusual spending" subtitle="Much higher than your usual for the category" />
+            <Card>
+              {summary.anomalies.map((a, i) => (
+                <View key={`${a.record_id ?? i}`} style={[styles.anomalyRow, i > 0 && styles.legendDivider]}>
+                  <IconBadge icon="warning" color={colors.danger} tint={colors.dangerSoft} size={36} />
+                  <View style={styles.legendText}>
+                    <Txt variant="label" numberOfLines={1}>
+                      {a.merchant ?? capitalize(a.category)}
+                    </Txt>
+                    <Txt variant="caption" color={colors.inkMuted}>
+                      {a.ratio}× your usual {formatMoney(a.typical_amount, summary.currency)} on{' '}
+                      {a.category} · {formatShortDate(a.transaction_date)}
+                    </Txt>
+                  </View>
+                  <Txt variant="bodyStrong" color={colors.danger}>
+                    {formatMoney(a.amount, summary.currency)}
+                  </Txt>
+                </View>
+              ))}
+            </Card>
+          </>
+        )}
+
         {/* ── Insights & recommendations ───────────────────── */}
         {insights.length > 0 && (
           <>
@@ -293,72 +299,38 @@ export default function InsightsScreen({ navigation }: Props) {
           </>
         )}
 
-        {/* ── Ask KharchAI ─────────────────────────────────── */}
-        <SectionHeader title="Ask KharchAI" subtitle="Answers are grounded in your saved records" />
-        <Card>
-          {messages.length === 0 ? (
-            <View style={styles.chips}>
-              {SUGGESTIONS.map((s) => (
-                <Pressable
-                  key={s}
-                  onPress={() => ask(s)}
-                  style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
-                >
-                  <Ionicons name="chatbubble-ellipses-outline" size={14} color={colors.primary} />
-                  <Txt variant="caption" color={colors.primaryDark} style={styles.chipText}>
-                    {s}
-                  </Txt>
-                </Pressable>
-              ))}
-            </View>
-          ) : (
-            <View style={styles.chat}>
-              {messages.map((m) => (
-                <ChatBubble key={m.id} message={m} />
-              ))}
-            </View>
-          )}
-          <View style={styles.inputRow}>
-            <TextInput
-              style={styles.input}
-              placeholder="Ask about your spending…"
-              placeholderTextColor={colors.inkMuted}
-              value={question}
-              onChangeText={setQuestion}
-              onSubmitEditing={() => ask(question)}
-              returnKeyType="send"
-            />
-            <Pressable
-              onPress={() => ask(question)}
-              disabled={!question.trim() || asking}
-              style={[styles.send, (!question.trim() || asking) && styles.sendDisabled]}
-              accessibilityRole="button"
-          accessibilityLabel="Send question"
-            >
-              <Ionicons name="arrow-up" size={20} color={colors.inkInverse} />
-            </Pressable>
+        {/* ── Assistant CTA ───────────────────────────────── */}
+        <Card style={styles.cta}>
+          <IconBadge icon="chatbubbles" color={colors.primary} tint={colors.primarySoft} size={46} round />
+          <View style={styles.ctaText}>
+            <Txt variant="bodyStrong">Have a question?</Txt>
+            <Txt variant="caption" color={colors.inkSecondary}>
+              Ask HissabAI in English, اردو or Roman Urdu.
+            </Txt>
           </View>
         </Card>
+        <Button
+          title="Open assistant"
+          iconRight="arrow-forward"
+          variant="secondary"
+          onPress={() => navigation.navigate('Assistant')}
+          style={styles.ctaButton}
+        />
       </>
     );
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.screen}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    <View style={styles.screen}>
       <FocusStatusBar style="dark" />
       <ScrollView
-        ref={scrollRef}
         showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
         contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.lg }]}
       >
         {header}
         {content}
       </ScrollView>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -419,38 +391,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   stepNumber: { fontSize: 13, letterSpacing: 0 },
-  chips: { gap: spacing.sm, marginBottom: spacing.lg },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    backgroundColor: colors.primarySoft,
-    borderRadius: radius.pill,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-  },
-  chipPressed: { opacity: 0.75 },
-  chipText: { marginLeft: 6, fontFamily: fonts.medium },
-  chat: { marginBottom: spacing.md },
-  inputRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  input: {
-    flex: 1,
-    minWidth: 0,
-    height: 48,
+  forecast: { marginTop: spacing.md, padding: spacing.lg },
+  forecastTop: { flexDirection: 'row', alignItems: 'center' },
+  forecastText: { flex: 1, marginLeft: spacing.md },
+  forecastTrack: {
+    height: 6,
+    borderRadius: 3,
     backgroundColor: colors.surfaceMuted,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.lg,
-    fontFamily: fonts.regular,
-    fontSize: 15,
-    color: colors.ink,
+    overflow: 'hidden',
+    marginTop: spacing.lg,
   },
-  send: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sendDisabled: { opacity: 0.4 },
+  forecastFill: { height: '100%', borderRadius: 3, backgroundColor: colors.info },
+  forecastMeta: { marginTop: spacing.sm },
+  anomalyRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.md },
+  cta: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.xxl, padding: spacing.lg },
+  ctaText: { flex: 1, marginLeft: spacing.md },
+  ctaButton: { marginTop: spacing.md },
 });

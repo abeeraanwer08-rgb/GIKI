@@ -1,4 +1,4 @@
-"""Small server-side Supabase REST client for KharchAI.
+"""Small server-side Supabase REST client for HissabAI.
 
 The client is intentionally lazy and is not imported by the upload path. This
 milestone establishes persistence infrastructure without changing the public
@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 import httpx
 
@@ -128,13 +128,14 @@ class SupabaseClient:
         path: str,
         *,
         json: Any = None,
+        headers: dict[str, str] | None = None,
     ) -> httpx.Response:
         """Send an authenticated request for future persistence services."""
         try:
             response = self._http.request(
                 method,
                 path,
-                headers=self._headers,
+                headers={**self._headers, **(headers or {})},
                 json=json,
             )
             response.raise_for_status()
@@ -167,6 +168,22 @@ class SupabaseClient:
             f"/rest/v1/financial_records?select=*&order=transaction_date.desc.nullslast&limit={limit}",
         )
         return response.json()
+
+    def list_budgets(self) -> list[dict[str, Any]]:
+        """Fetch every category budget."""
+        return self.request("GET", "/rest/v1/budgets?select=*&order=category.asc").json()
+
+    def upsert_budget(self, payload: dict[str, Any]) -> None:
+        """Create or replace the budget for payload['category']."""
+        self.request(
+            "POST",
+            "/rest/v1/budgets",
+            json=payload,
+            headers={"Prefer": "resolution=merge-duplicates"},
+        )
+
+    def delete_budget(self, category: str) -> None:
+        self.request("DELETE", f"/rest/v1/budgets?category=eq.{quote(category, safe='')}")
 
     def close(self) -> None:
         """Release the underlying HTTP client."""

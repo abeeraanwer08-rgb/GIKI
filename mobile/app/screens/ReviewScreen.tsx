@@ -1,5 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import {
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,7 +24,8 @@ import ItemRow from '../components/review/ItemRow';
 import HintCard from '../components/review/HintCard';
 import SummaryRow from '../components/review/SummaryRow';
 import { generateUUID } from '../utils/uuid';
-import { documentTypeLabel } from '../utils/categoryStyle';
+import { CATEGORIES, documentTypeLabel, getCategoryStyle } from '../utils/categoryStyle';
+import { capitalize } from '../utils/format';
 import Txt from '../ui/Txt';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
@@ -77,6 +87,7 @@ function buildSavePayload(
   editedTotal: string,
   editedItems: UFRItem[],
   ufr: UniversalFinancialRecord,
+  category: string | null,
   confirmTotalMismatch: boolean = false,
 ): SaveRecordPayload {
   return {
@@ -87,7 +98,7 @@ function buildSavePayload(
     currency: parseCurrencyCode(editedTotal),
     total_amount: parseNumericAmount(editedTotal),
     payment_method: null,
-    category: null,
+    category,
     items: editedItems.map((item) => ({
       description: item.name,
       amount: parseNumericAmount(item.amount),
@@ -129,6 +140,8 @@ export default function ReviewScreen({ route, navigation }: Props) {
   const [editedDate, setEditedDate] = useState('');
   const [editedTotal, setEditedTotal] = useState('');
   const [editedItems, setEditedItems] = useState<UFRItem[]>([]);
+  // null = let HissabAI auto-categorise on save.
+  const [category, setCategory] = useState<string | null>(null);
 
   // Save lifecycle state.
   const [isSaving, setIsSaving] = useState(false);
@@ -168,19 +181,20 @@ export default function ReviewScreen({ route, navigation }: Props) {
       editedTotal,
       editedItems,
       ufr,
+      category,
       confirmMismatch,
     );
 
     setIsSaving(true);
 
     try {
-      await saveFinancialRecord(payload);
+      const result = await saveFinancialRecord(payload);
 
       // HTTP 201 — success.
       setSaved(true);
       Alert.alert(
         'Saved',
-        'Your financial record has been saved successfully.',
+        `Your expense was saved under ${capitalize(result.category ?? 'other')}.`,
         [{ text: 'OK', onPress: () => navigation.popToTop() }],
       );
     } catch (error) {
@@ -352,6 +366,42 @@ export default function ReviewScreen({ route, navigation }: Props) {
           </View>
         </Card>
 
+        {/* ── Category ─────────────────────────────────────── */}
+        <SectionHeader title="Category" subtitle="Auto-detect uses the merchant and items" />
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chips}
+        >
+          {[null, ...CATEGORIES].map((c) => {
+            const selected = c === category;
+            const style = c ? getCategoryStyle(c) : null;
+            const tint = style?.color ?? colors.primary;
+            return (
+              <Pressable
+                key={c ?? 'auto'}
+                onPress={() => setCategory(c)}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                style={[styles.chip, selected && { backgroundColor: tint, borderColor: tint }]}
+              >
+                <Ionicons
+                  name={style?.icon ?? 'sparkles'}
+                  size={15}
+                  color={selected ? colors.inkInverse : tint}
+                />
+                <Txt
+                  variant="label"
+                  color={selected ? colors.inkInverse : colors.ink}
+                  style={styles.chipText}
+                >
+                  {c ? capitalize(c) : 'Auto-detect'}
+                </Txt>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+
         {editedItems.length > 0 && (
           <>
             <SectionHeader
@@ -448,6 +498,18 @@ const styles = StyleSheet.create({
   hintsTitle: { marginBottom: spacing.md },
   lastField: { marginBottom: -spacing.lg },
   itemsCard: { paddingVertical: spacing.sm },
+  chips: { gap: spacing.sm, paddingRight: spacing.xl },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  chipText: { marginLeft: 6 },
   footer: {
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.md,

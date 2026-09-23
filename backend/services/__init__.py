@@ -1,5 +1,5 @@
 """
-KharchAI services package.
+HissabAI services package.
 
 Exports:
     ImageQualityService        — image quality checks (OpenCV)

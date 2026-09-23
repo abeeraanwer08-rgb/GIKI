@@ -7,6 +7,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from schemas.ufr import UniversalFinancialRecord
+from services.categorization import CategorizationService
 from services.supabase_client import (
     SupabaseClient,
     get_supabase_client,
@@ -50,8 +51,13 @@ class FinancialRecordPersistenceService:
     # tolerance could allow a materially incorrect reviewed total to save.
     TOTAL_ROUNDING_TOLERANCE = Decimal("0.01")
 
-    def __init__(self, client: SupabaseClient | None = None) -> None:
+    def __init__(
+        self,
+        client: SupabaseClient | None = None,
+        categorizer: CategorizationService | None = None,
+    ) -> None:
         self._client = client
+        self._categorizer = categorizer or CategorizationService()
 
     def save(
         self,
@@ -71,7 +77,21 @@ class FinancialRecordPersistenceService:
         """
         self.validate(record)
         self._check_total_reconciliation(record, confirm_total_mismatch)
+        self._assign_category(record)
         self.client.insert_financial_record(self.to_database_payload(record))
+
+    def _assign_category(self, record: UniversalFinancialRecord) -> None:
+        """Keep a user-chosen category; otherwise derive one so insights can group it."""
+        if record.category and record.category.strip():
+            record.metadata.category_source = record.metadata.category_source or "user"
+            return
+        result = self._categorizer.categorize(
+            document_type=record.document_type,
+            merchant=record.merchant,
+            item_descriptions=[item.description for item in record.items],
+        )
+        record.category = result.category
+        record.metadata.category_source = result.source
 
     @property
     def client(self) -> SupabaseClient:

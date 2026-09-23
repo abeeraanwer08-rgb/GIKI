@@ -1,4 +1,4 @@
-# KharchAI — Planned Architecture
+# HissabAI — Planned Architecture
 
 > **Note:** This documents the intended architecture. Some downstream
 > components remain future milestones.

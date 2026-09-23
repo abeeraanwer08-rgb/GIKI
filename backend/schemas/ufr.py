@@ -47,6 +47,7 @@ class UniversalFinancialRecordMetadata(BaseModel):
     grand_total_amount: Optional[float] = None
     parser_version: str
     confirm_total_mismatch: Optional[bool] = None
+    category_source: Optional[str] = None
 
 
 class UniversalFinancialRecord(BaseModel):

@@ -11,6 +11,7 @@ class FinancialRecordSaveResponse(BaseModel):
     saved: bool
     record_id: str
     document_type: str
+    category: str | None = None
 
 
 class FinancialRecordSummary(BaseModel):
@@ -31,7 +32,7 @@ class FinancialRecordListResponse(BaseModel):
     records: list[FinancialRecordSummary]
 
 
-def to_summary(row: dict[str, Any]) -> FinancialRecordSummary:
+def to_summary(row: dict[str, Any], category: str | None = None) -> FinancialRecordSummary:
     """Map a raw stored record row to the mobile-facing summary shape."""
     return FinancialRecordSummary(
         id=row["id"],
@@ -40,5 +41,5 @@ def to_summary(row: dict[str, Any]) -> FinancialRecordSummary:
         transaction_date=row.get("transaction_date"),
         amount=row.get("amount"),
         currency=row.get("currency"),
-        category=row.get("category"),
+        category=category or row.get("category"),
     )

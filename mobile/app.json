@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "KharchAI",
-    "slug": "kharchai",
+    "name": "HissabAI",
+    "slug": "hissabai",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
@@ -10,12 +10,12 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "KharchAI needs your camera to scan receipts."
+          "cameraPermission": "HissabAI needs your camera to scan receipts."
         }
       ]
     ],
     "android": {
-      "package": "com.kharchai.app"
+      "package": "com.hissabai.app"
     }
   }
 }

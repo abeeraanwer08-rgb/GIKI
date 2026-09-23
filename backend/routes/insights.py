@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from schemas.insights import AskRequest, AskResponse, InsightsResponse
-from services.financial_calculations import FinancialCalculationsService
+from services.financial_calculations import FinancialCalculationsService, FinancialSummary
 from services.financial_reasoning import FinancialReasoningError, FinancialReasoningService
 from services.supabase_client import (
     SupabaseClient,
@@ -44,6 +44,22 @@ def _load_summary(
             detail={"error": "Financial record storage is unavailable."},
         ) from exc
     return calculations.summarize(records)
+
+
+@router.get(
+    "/summary",
+    response_model=FinancialSummary,
+    summary="Get the deterministic spending summary without calling the LLM",
+    description=(
+        "Returns totals, category and month breakdowns, the month-end "
+        "forecast and unusual-spending flags. Cheap to call: no LLM involved."
+    ),
+)
+def get_summary(
+    supabase: SupabaseClient = Depends(get_supabase_dependency),
+    calculations: FinancialCalculationsService = Depends(get_calculations_service),
+) -> FinancialSummary:
+    return _load_summary(supabase, calculations)
 
 
 @router.get(

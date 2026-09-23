@@ -79,6 +79,33 @@ unavailable.
 
 ---
 
+### GET /api/v1/financial-records
+
+Lists saved financial records, most recent first, shaped for the mobile
+Home screen's transaction list.
+
+**Response — HTTP 200**
+
+```json
+{
+  "records": [
+    {
+      "id": "receipt-2026-08-12-001",
+      "document_type": "receipt",
+      "merchant": "Karachi Grocers",
+      "transaction_date": "2026-08-12",
+      "amount": 450.5,
+      "currency": "PKR",
+      "category": "groceries"
+    }
+  ]
+}
+```
+
+Returns HTTP 503 when persistence is unavailable.
+
+---
+
 ### GET /api/v1/insights
 
 Computes a deterministic spending summary from saved financial records and

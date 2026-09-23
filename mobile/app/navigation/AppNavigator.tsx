@@ -6,10 +6,12 @@ import CameraScreen from '../screens/CameraScreen';
 import ReceiptPreviewScreen from '../screens/ReceiptPreviewScreen';
 import ProcessingScreen from '../screens/ProcessingScreen';
 import ReviewScreen from '../screens/ReviewScreen';
+import InsightsScreen from '../screens/InsightsScreen';
 import { UniversalFinancialRecord } from '../types/ufr';
 
 export type RootStackParamList = {
   Home: undefined;
+  Insights: undefined;
   AddExpense: undefined;
   Camera: undefined;
   ReceiptPreview: {
@@ -43,6 +45,11 @@ export default function AppNavigator() {
         name="Home"
         component={HomeScreen}
         options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="Insights"
+        component={InsightsScreen}
+        options={{ title: 'Insights' }}
       />
       <Stack.Screen
         name="AddExpense"

@@ -11,7 +11,10 @@ from schemas.ufr import (
     UniversalFinancialRecordItem,
     UniversalFinancialRecordMetadata,
 )
-from routes.financial_records import get_financial_record_persistence_service
+from routes.financial_records import (
+    get_financial_record_persistence_service,
+    get_supabase_dependency,
+)
 from services.financial_record_persistence import FinancialRecordPersistenceService
 from services.supabase_client import (
     SupabaseClient,
@@ -21,16 +24,26 @@ from services.supabase_client import (
 
 
 class FakeSupabaseClient:
-    """In-memory insert spy; no test writes to Supabase."""
+    """In-memory insert/list spy; no test writes to or reads from Supabase."""
 
-    def __init__(self, error: Exception | None = None) -> None:
+    def __init__(
+        self,
+        error: Exception | None = None,
+        records: list[dict[str, Any]] | None = None,
+    ) -> None:
         self.payloads: list[dict[str, Any]] = []
         self.error = error
+        self.records = records if records is not None else []
 
     def insert_financial_record(self, payload: dict[str, Any]) -> None:
         if self.error is not None:
             raise self.error
         self.payloads.append(payload)
+
+    def list_financial_records(self, *, limit: int = 500) -> list[dict[str, Any]]:
+        if self.error is not None:
+            raise self.error
+        return self.records
 
 
 def make_record(
@@ -102,6 +115,7 @@ class FinancialRecordEndpointTests(unittest.TestCase):
         app.dependency_overrides[
             get_financial_record_persistence_service
         ] = lambda: self.persistence
+        app.dependency_overrides[get_supabase_dependency] = lambda: self.client
         self.http = TestClient(app)
 
     def tearDown(self) -> None:
@@ -480,6 +494,49 @@ class FinancialRecordEndpointTests(unittest.TestCase):
             response.json()["detail"],
             {"error": "Financial record persistence is unavailable."},
         )
+
+    # ── GET /api/v1/financial-records ────────────────────────────────────────
+
+    def test_list_returns_saved_records_shaped_for_mobile(self):
+        self.client.records = [
+            {
+                "id": "record-1",
+                "document_type": "receipt",
+                "merchant_provider": "Karachi Grocers",
+                "transaction_date": "2026-08-12",
+                "amount": 450.5,
+                "currency": "PKR",
+                "category": "groceries",
+            }
+        ]
+        response = self.http.get("/api/v1/financial-records")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {
+                "records": [
+                    {
+                        "id": "record-1",
+                        "document_type": "receipt",
+                        "merchant": "Karachi Grocers",
+                        "transaction_date": "2026-08-12",
+                        "amount": 450.5,
+                        "currency": "PKR",
+                        "category": "groceries",
+                    }
+                ]
+            },
+        )
+
+    def test_list_returns_empty_list_when_nothing_saved(self):
+        response = self.http.get("/api/v1/financial-records")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"records": []})
+
+    def test_list_returns_503_when_storage_is_unavailable(self):
+        self.client.error = SupabaseConnectionError("simulated database failure")
+        response = self.http.get("/api/v1/financial-records")
+        self.assertEqual(response.status_code, 503)
 
 
 class SupabaseInsertTests(unittest.TestCase):

@@ -1,8 +1,12 @@
-"""API routes for saving user-approved financial records."""
+"""API routes for saving and listing user-approved financial records."""
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from schemas.financial_record import FinancialRecordSaveResponse
+from schemas.financial_record import (
+    FinancialRecordListResponse,
+    FinancialRecordSaveResponse,
+    to_summary,
+)
 from schemas.ufr import UniversalFinancialRecord
 from services.financial_record_persistence import (
     FinancialRecordPersistenceService,
@@ -10,9 +14,11 @@ from services.financial_record_persistence import (
     FinancialRecordValidationError,
 )
 from services.supabase_client import (
+    SupabaseClient,
     SupabaseConfigurationError,
     SupabaseConflictError,
     SupabaseConnectionError,
+    get_supabase_client,
 )
 
 router = APIRouter(
@@ -26,6 +32,34 @@ _persistence_service = FinancialRecordPersistenceService()
 def get_financial_record_persistence_service() -> FinancialRecordPersistenceService:
     """Provide the persistence service and keep the Supabase client lazy."""
     return _persistence_service
+
+
+def get_supabase_dependency() -> SupabaseClient:
+    return get_supabase_client()
+
+
+@router.get(
+    "",
+    response_model=FinancialRecordListResponse,
+    summary="List saved financial records",
+    description=(
+        "Returns saved financial records, most recent first, shaped for a "
+        "mobile transaction list. Returns HTTP 503 when persistence is "
+        "unavailable."
+    ),
+)
+def list_financial_records(
+    supabase: SupabaseClient = Depends(get_supabase_dependency),
+) -> FinancialRecordListResponse:
+    try:
+        rows = supabase.list_financial_records()
+    except (SupabaseConfigurationError, SupabaseConnectionError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"error": "Financial record persistence is unavailable."},
+        ) from exc
+
+    return FinancialRecordListResponse(records=[to_summary(row) for row in rows])
 
 
 @router.post(

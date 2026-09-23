@@ -114,3 +114,21 @@
 - Preserved all existing upload, save, and review-response behavior; this is
   a purely additive read path.
 - Added ADR-0009 documenting the calculations/reasoning boundary.
+
+## Home Transaction List and Insights Screen
+
+- Added `GET /api/v1/financial-records` to list saved records, most recent
+  first, shaped for a mobile transaction list. Returns HTTP 503 when
+  persistence is unavailable, matching the existing endpoint's convention.
+- Replaced the Home screen's permanent empty state with a real "Recent
+  Transactions" list backed by that endpoint, refetched whenever Home
+  regains focus (e.g. after saving an expense), plus a running total-tracked
+  summary in the header. The empty/error states are preserved for the
+  no-data and offline cases.
+- Added a new Insights screen (`GET /api/v1/insights` and
+  `POST /api/v1/insights/ask`): a spending-by-category breakdown, the
+  AI-generated headline/insights/recommendations, and a free-form "Ask
+  KharchAI" question box — all grounded in the deterministic summary.
+- Added `insightsService.ts` and typed request/response shapes reusing the
+  existing service-layer error-handling pattern.
+- Preserved all existing screens, navigation, and save/review behavior.

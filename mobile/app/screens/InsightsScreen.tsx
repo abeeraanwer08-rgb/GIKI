@@ -11,6 +11,8 @@ import {
   Platform,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { InsightsResponse } from '../types/insights';
 import { fetchInsights, askInsights, ApiError } from '../services/insightsService';
 import SectionTitle from '../components/review/SectionTitle';
@@ -77,7 +79,9 @@ export default function InsightsScreen() {
   if (state === 'error') {
     return (
       <View style={styles.centered}>
-        <Text style={styles.emptyIcon}>⚠️</Text>
+        <View style={[styles.emptyIconCircle, { backgroundColor: '#FBEAE8' }]}>
+          <Ionicons name="cloud-offline" size={32} color="#C0392B" />
+        </View>
         <Text style={styles.emptyTitle}>Couldn't load insights</Text>
         <Text style={styles.emptyText}>
           The AI insights service may be unavailable. Pull to refresh or try again shortly.
@@ -89,7 +93,9 @@ export default function InsightsScreen() {
   if (state === 'empty' || !data) {
     return (
       <View style={styles.centered}>
-        <Text style={styles.emptyIcon}>✨</Text>
+        <View style={styles.emptyIconCircle}>
+          <Ionicons name="sparkles" size={32} color="#1B5E3B" />
+        </View>
         <Text style={styles.emptyTitle}>No insights yet</Text>
         <Text style={styles.emptyText}>
           Save a few expenses first — insights are generated from your saved records.
@@ -112,8 +118,13 @@ export default function InsightsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Hero summary */}
-        <View style={styles.heroCard}>
-          <Text style={styles.heroLabel}>Total spending</Text>
+        <LinearGradient colors={['#1F6E45', '#123D28']} style={styles.heroCard}>
+          <View style={styles.heroTopRow}>
+            <View style={styles.heroIconBadge}>
+              <Ionicons name="stats-chart" size={16} color="#FFFFFF" />
+            </View>
+            <Text style={styles.heroLabel}>Total spending</Text>
+          </View>
           <Text style={styles.heroAmount}>
             {summary.currency ? `${summary.currency} ` : ''}
             {summary.total_amount.toLocaleString(undefined, { maximumFractionDigits: 0 })}
@@ -121,8 +132,12 @@ export default function InsightsScreen() {
           <Text style={styles.heroMeta}>
             Across {summary.record_count} record{summary.record_count === 1 ? '' : 's'}
           </Text>
-          <Text style={styles.headline}>{headline}</Text>
-        </View>
+          <View style={styles.heroDivider} />
+          <View style={styles.headlineRow}>
+            <Ionicons name="bulb" size={15} color="#FFD782" style={styles.headlineIcon} />
+            <Text style={styles.headline}>{headline}</Text>
+          </View>
+        </LinearGradient>
 
         {summary.by_category.length > 0 && (
           <>
@@ -144,7 +159,12 @@ export default function InsightsScreen() {
           <>
             <SectionTitle title="Insights" />
             <View style={styles.card}>
-              <BulletList icon="💡" items={insights} />
+              <BulletList
+                icon="bulb"
+                iconColor="#B8860B"
+                iconTint="#FBF2DA"
+                items={insights}
+              />
             </View>
           </>
         )}
@@ -153,7 +173,12 @@ export default function InsightsScreen() {
           <>
             <SectionTitle title="Recommendations" />
             <View style={styles.card}>
-              <BulletList icon="✅" items={recommendations} />
+              <BulletList
+                icon="checkmark-circle"
+                iconColor="#1B5E3B"
+                iconTint="#E3F3E9"
+                items={recommendations}
+              />
             </View>
           </>
         )}
@@ -167,7 +192,7 @@ export default function InsightsScreen() {
             <TextInput
               style={styles.askInput}
               placeholder="e.g. What did I spend the most on?"
-              placeholderTextColor="#AAAAAA"
+              placeholderTextColor="#A6ADB6"
               value={question}
               onChangeText={setQuestion}
               onSubmitEditing={handleAsk}
@@ -182,13 +207,21 @@ export default function InsightsScreen() {
               {asking ? (
                 <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
-                <Text style={styles.askButtonText}>Ask</Text>
+                <Ionicons name="send" size={16} color="#FFFFFF" />
               )}
             </TouchableOpacity>
           </View>
-          {askError && <Text style={styles.askError}>{askError}</Text>}
+          {askError && (
+            <View style={styles.askErrorRow}>
+              <Ionicons name="alert-circle" size={14} color="#C0392B" />
+              <Text style={styles.askError}>{askError}</Text>
+            </View>
+          )}
           {answer && (
             <View style={styles.answerBox}>
+              <View style={styles.answerIconBadge}>
+                <Ionicons name="sparkles" size={13} color="#1B5E3B" />
+              </View>
               <Text style={styles.answerText}>{answer}</Text>
             </View>
           )}
@@ -204,7 +237,7 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#F7F8FA',
   },
   content: {
     padding: 24,
@@ -214,12 +247,17 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#F7F8FA',
     padding: 32,
   },
-  emptyIcon: {
-    fontSize: 48,
-    marginBottom: 16,
+  emptyIconCircle: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: '#E3F3E9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 18,
   },
   emptyTitle: {
     fontSize: 18,
@@ -229,52 +267,80 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 14,
-    color: '#888888',
+    color: '#8B94A0',
     textAlign: 'center',
     lineHeight: 20,
   },
   heroCard: {
-    backgroundColor: '#1B5E3B',
-    borderRadius: 20,
+    borderRadius: 22,
     padding: 24,
     marginBottom: 8,
+  },
+  heroTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  heroIconBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
   },
   heroLabel: {
     fontSize: 12,
     color: '#A8D5B8',
-    fontWeight: '600',
+    fontWeight: '700',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
   },
   heroAmount: {
-    fontSize: 32,
+    fontSize: 34,
     fontWeight: '800',
     color: '#FFFFFF',
-    marginTop: 4,
   },
   heroMeta: {
     fontSize: 12,
     color: '#A8D5B8',
     marginTop: 2,
   },
+  heroDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    marginVertical: 16,
+  },
+  headlineRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  headlineIcon: {
+    marginRight: 8,
+    marginTop: 2,
+  },
   headline: {
+    flex: 1,
     fontSize: 14,
     color: '#FFFFFF',
-    marginTop: 16,
     lineHeight: 20,
     fontWeight: '500',
   },
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E8EDF2',
+    borderRadius: 16,
+    padding: 18,
+    shadowColor: '#1A1A2E',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 1,
   },
   askHint: {
     fontSize: 12,
-    color: '#888888',
-    marginBottom: 12,
+    color: '#8B94A0',
+    marginBottom: 14,
     lineHeight: 18,
   },
   askRow: {
@@ -283,41 +349,52 @@ const styles = StyleSheet.create({
   },
   askInput: {
     flex: 1,
-    borderWidth: 1,
-    borderColor: '#E8EDF2',
-    borderRadius: 10,
+    backgroundColor: '#F7F8FA',
+    borderRadius: 12,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 12,
     fontSize: 14,
     color: '#1A1A2E',
   },
   askButton: {
     backgroundColor: '#1B5E3B',
-    borderRadius: 10,
-    paddingHorizontal: 18,
+    borderRadius: 12,
+    width: 46,
     alignItems: 'center',
     justifyContent: 'center',
   },
   askButtonDisabled: {
-    opacity: 0.5,
+    opacity: 0.45,
   },
-  askButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
+  askErrorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
   },
   askError: {
     fontSize: 12,
     color: '#C0392B',
-    marginTop: 10,
+    marginLeft: 6,
+    flex: 1,
   },
   answerBox: {
+    flexDirection: 'row',
     marginTop: 14,
-    backgroundColor: '#EAF5EE',
-    borderRadius: 10,
+    backgroundColor: '#E3F3E9',
+    borderRadius: 14,
     padding: 14,
   },
+  answerIconBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
   answerText: {
+    flex: 1,
     fontSize: 14,
     color: '#1A1A2E',
     lineHeight: 20,

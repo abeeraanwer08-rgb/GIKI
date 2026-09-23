@@ -1,12 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { FinancialRecordSummary } from '../../types/insights';
-
-const DOCUMENT_ICONS: Record<string, string> = {
-  receipt: '🧾',
-  utility_bill: '💡',
-  wallet_screenshot: '📱',
-};
+import { getCategoryStyle } from '../../utils/categoryStyle';
 
 function formatAmount(amount: number | null, currency: string | null): string {
   if (amount === null) return '—';
@@ -26,12 +22,12 @@ type Props = {
 };
 
 export default function TransactionRow({ record }: Props) {
-  const icon = DOCUMENT_ICONS[record.document_type] ?? '💳';
+  const style = getCategoryStyle(record.category, record.document_type);
 
   return (
     <View style={styles.row}>
-      <View style={styles.iconBadge}>
-        <Text style={styles.icon}>{icon}</Text>
+      <View style={[styles.iconBadge, { backgroundColor: style.tint }]}>
+        <Ionicons name={style.icon} size={20} color={style.color} />
       </View>
       <View style={styles.details}>
         <Text style={styles.merchant} numberOfLines={1}>
@@ -52,23 +48,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: 16,
     padding: 14,
     marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#E8EDF2',
+    shadowColor: '#1A1A2E',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 1,
   },
   iconBadge: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: '#EAF5EE',
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
-  },
-  icon: {
-    fontSize: 20,
   },
   details: {
     flex: 1,
@@ -82,7 +77,7 @@ const styles = StyleSheet.create({
   },
   meta: {
     fontSize: 12,
-    color: '#888888',
+    color: '#8B94A0',
     textTransform: 'capitalize',
   },
   amount: {

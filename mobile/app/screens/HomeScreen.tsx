@@ -12,6 +12,8 @@ import {
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { FinancialRecordSummary } from '../types/insights';
 import { fetchFinancialRecords } from '../services/insightsService';
@@ -59,10 +61,10 @@ export default function HomeScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#1B5E3B" />
+      <StatusBar barStyle="light-content" backgroundColor="#164A30" />
 
       {/* Header */}
-      <View style={styles.header}>
+      <LinearGradient colors={['#1F6E45', '#164A30']} style={styles.header}>
         <View style={styles.headerTop}>
           <View>
             <Text style={styles.appName}>KharchAI</Text>
@@ -73,19 +75,24 @@ export default function HomeScreen({ navigation }: Props) {
             onPress={() => navigation.navigate('Insights')}
             activeOpacity={0.8}
           >
-            <Text style={styles.insightsButtonIcon}>✨</Text>
+            <Ionicons name="sparkles" size={14} color="#FFFFFF" style={styles.insightsIcon} />
             <Text style={styles.insightsButtonText}>Insights</Text>
           </TouchableOpacity>
         </View>
         {records.length > 0 && (
           <View style={styles.totalCard}>
-            <Text style={styles.totalLabel}>Total tracked</Text>
-            <Text style={styles.totalValue}>
-              {currency} {total.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-            </Text>
+            <View style={styles.totalIconBadge}>
+              <Ionicons name="wallet" size={18} color="#FFFFFF" />
+            </View>
+            <View>
+              <Text style={styles.totalLabel}>Total tracked</Text>
+              <Text style={styles.totalValue}>
+                {currency} {total.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+              </Text>
+            </View>
           </View>
         )}
-      </View>
+      </LinearGradient>
 
       {/* Main content */}
       <View style={styles.content}>
@@ -100,7 +107,13 @@ export default function HomeScreen({ navigation }: Props) {
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
             ListEmptyComponent={
               <View style={styles.emptyState}>
-                <Text style={styles.emptyStateIcon}>📊</Text>
+                <View style={styles.emptyIconCircle}>
+                  <Ionicons
+                    name={state === 'error' ? 'cloud-offline' : 'receipt-outline'}
+                    size={36}
+                    color="#1B5E3B"
+                  />
+                </View>
                 <Text style={styles.emptyStateTitle}>
                   {state === 'error' ? "Couldn't load your expenses" : 'No expenses yet'}
                 </Text>
@@ -131,11 +144,14 @@ export default function HomeScreen({ navigation }: Props) {
       {/* Footer CTA */}
       <View style={styles.footer}>
         <TouchableOpacity
-          style={styles.primaryButton}
           onPress={() => navigation.navigate('AddExpense')}
           activeOpacity={0.85}
+          style={styles.primaryButtonWrapper}
         >
-          <Text style={styles.primaryButtonText}>+ Add Expense</Text>
+          <LinearGradient colors={['#1F6E45', '#164A30']} style={styles.primaryButton}>
+            <Ionicons name="add" size={20} color="#FFFFFF" style={styles.primaryButtonIcon} />
+            <Text style={styles.primaryButtonText}>Add Expense</Text>
+          </LinearGradient>
         </TouchableOpacity>
         <Text style={styles.footerNote}>Track your spending in PKR</Text>
       </View>
@@ -146,10 +162,9 @@ export default function HomeScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#1B5E3B',
+    backgroundColor: '#164A30',
   },
   header: {
-    backgroundColor: '#1B5E3B',
     paddingHorizontal: 24,
     paddingTop: 32,
     paddingBottom: 24,
@@ -160,27 +175,26 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   appName: {
-    fontSize: 34,
+    fontSize: 32,
     fontWeight: '800',
     color: '#FFFFFF',
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
   tagline: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#A8D5B8',
     marginTop: 4,
   },
   insightsButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.16)',
+    backgroundColor: 'rgba(255,255,255,0.18)',
     borderRadius: 20,
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingVertical: 9,
     marginTop: 4,
   },
-  insightsButtonIcon: {
-    fontSize: 14,
+  insightsIcon: {
     marginRight: 6,
   },
   insightsButtonText: {
@@ -191,27 +205,38 @@ const styles = StyleSheet.create({
   totalCard: {
     marginTop: 24,
     backgroundColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 16,
+    borderRadius: 18,
     padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  totalIconBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
   },
   totalLabel: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#A8D5B8',
-    fontWeight: '600',
+    fontWeight: '700',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
   },
   totalValue: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '800',
     color: '#FFFFFF',
-    marginTop: 4,
+    marginTop: 2,
   },
   content: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    backgroundColor: '#F7F8FA',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     paddingHorizontal: 24,
     paddingTop: 24,
   },
@@ -236,8 +261,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 40,
   },
-  emptyStateIcon: {
-    fontSize: 60,
+  emptyIconCircle: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: '#E3F3E9',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 20,
   },
   emptyStateTitle: {
@@ -248,33 +278,41 @@ const styles = StyleSheet.create({
   },
   emptyStateText: {
     fontSize: 14,
-    color: '#888888',
+    color: '#8B94A0',
     textAlign: 'center',
     lineHeight: 22,
     paddingHorizontal: 16,
   },
   footer: {
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#F7F8FA',
     paddingHorizontal: 24,
     paddingBottom: 36,
     paddingTop: 16,
     alignItems: 'center',
   },
+  primaryButtonWrapper: {
+    width: '100%',
+    borderRadius: 14,
+    shadowColor: '#164A30',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+  },
   primaryButton: {
-    backgroundColor: '#1B5E3B',
+    flexDirection: 'row',
     paddingVertical: 16,
-    borderRadius: 12,
+    borderRadius: 14,
     width: '100%',
     alignItems: 'center',
-    elevation: 3,
-    shadowColor: '#1B5E3B',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
+    justifyContent: 'center',
+  },
+  primaryButtonIcon: {
+    marginRight: 6,
   },
   primaryButtonText: {
     color: '#FFFFFF',
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '700',
     letterSpacing: 0.3,
   },

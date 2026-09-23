@@ -132,3 +132,16 @@
 - Added `insightsService.ts` and typed request/response shapes reusing the
   existing service-layer error-handling pattern.
 - Preserved all existing screens, navigation, and save/review behavior.
+
+## Visual Polish Pass
+
+- Replaced emoji icons across Home, Insights, and Add Expense with
+  `@expo/vector-icons` (Ionicons), colored per category via a shared
+  `getCategoryStyle` helper (groceries/restaurant/utilities/wallet each get
+  a distinct icon + color).
+- Added `expo-linear-gradient` for the Home header and Insights hero card.
+- Restyled transaction rows, category bars, and insight/recommendation
+  bullets with icon badges instead of plain text bullets; restyled the Ask
+  box with an icon send button and an icon-badged answer bubble.
+- Verified visually via the same local Expo web preview against sample data
+  before committing.

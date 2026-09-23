@@ -7,6 +7,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/AppNavigator';
 
 type AddExpenseScreenNavigationProp = NativeStackNavigationProp<
@@ -36,14 +37,16 @@ export default function AddExpenseScreen({ navigation }: Props) {
         onPress={() => navigation.navigate('Camera')}
         activeOpacity={0.85}
       >
-        <Text style={styles.cardIcon}>📷</Text>
+        <View style={styles.cardIconBadge}>
+          <Ionicons name="camera" size={22} color="#1B5E3B" />
+        </View>
         <View style={styles.cardTextContainer}>
           <Text style={styles.cardTitle}>Scan Receipt</Text>
           <Text style={styles.cardDescription}>
             Use your camera to scan a receipt — AI will fill in the details
           </Text>
         </View>
-        <Text style={styles.cardArrow}>›</Text>
+        <Ionicons name="chevron-forward" size={22} color="#1B5E3B" />
       </TouchableOpacity>
 
       {/* Divider */}
@@ -55,7 +58,9 @@ export default function AddExpenseScreen({ navigation }: Props) {
 
       {/* Disabled — Manual entry */}
       <View style={[styles.card, styles.disabledCard]}>
-        <Text style={styles.cardIcon}>✏️</Text>
+        <View style={[styles.cardIconBadge, styles.cardIconBadgeDisabled]}>
+          <Ionicons name="create" size={22} color="#BBBBBB" />
+        </View>
         <View style={styles.cardTextContainer}>
           <Text style={[styles.cardTitle, styles.disabledText]}>Enter Manually</Text>
           <Text style={[styles.cardDescription, styles.disabledText]}>
@@ -114,9 +119,17 @@ const styles = StyleSheet.create({
   disabledCard: {
     opacity: 0.45,
   },
-  cardIcon: {
-    fontSize: 32,
+  cardIconBadge: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: '#E3F3E9',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginRight: 16,
+  },
+  cardIconBadgeDisabled: {
+    backgroundColor: '#F0F1F3',
   },
   cardTextContainer: {
     flex: 1,
@@ -134,12 +147,6 @@ const styles = StyleSheet.create({
   },
   disabledText: {
     color: '#BBBBBB',
-  },
-  cardArrow: {
-    fontSize: 26,
-    color: '#1B5E3B',
-    fontWeight: '700',
-    marginLeft: 8,
   },
   divider: {
     flexDirection: 'row',

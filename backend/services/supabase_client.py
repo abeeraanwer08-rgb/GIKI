@@ -160,6 +160,14 @@ class SupabaseClient:
             json=payload,
         )
 
+    def list_financial_records(self, *, limit: int = 500) -> list[dict[str, Any]]:
+        """Fetch saved financial records, most recent first, for calculations."""
+        response = self.request(
+            "GET",
+            f"/rest/v1/financial_records?select=*&order=transaction_date.desc.nullslast&limit={limit}",
+        )
+        return response.json()
+
     def close(self) -> None:
         """Release the underlying HTTP client."""
         self._http.close()

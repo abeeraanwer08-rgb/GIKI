@@ -5,11 +5,14 @@ It helps users track expenses by analysing receipts and providing intelligent fi
 
 ---
 
-## Current Milestone: Save Reviewed Financial Record
+## Current Milestone: Financial Calculations and AI Financial Reasoning
 
-The backend uses **Python + FastAPI** and now has a server-side Supabase
-foundation for the existing Universal Financial Record pipeline. Reviewed UFRs
-can now be validated and saved server-side without rerunning document parsing.
+The backend uses **Python + FastAPI** with a server-side Supabase foundation
+for the Universal Financial Record pipeline. Saved records now feed a
+deterministic spending summary and an AI reasoning layer that generates
+insights, recommendations, and answers to natural-language questions —
+grounded strictly in that summary. See
+[`docs/adr/0009-financial-insights-and-ai-reasoning.md`](docs/adr/0009-financial-insights-and-ai-reasoning.md).
 
 ---
 
@@ -54,6 +57,21 @@ Expected response:
 
 ---
 
+## Testing the financial insights endpoints
+
+```bash
+curl http://localhost:8000/api/v1/insights
+
+curl -X POST http://localhost:8000/api/v1/insights/ask \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What did I spend the most on?"}'
+```
+
+Both endpoints require `OPENAI_API_KEY`, `SUPABASE_URL`, and
+`SUPABASE_SERVICE_ROLE_KEY` to be configured server-side.
+
+---
+
 ## Interactive API Documentation
 
 Once the backend is running, open:
@@ -78,11 +96,12 @@ initial database schema from
 
 ## What is NOT implemented yet
 
-- Receipt image analysis
-- OpenAI / multimodal AI integration
-- Authentication
-- Android mobile application
-- Financial calculations / AI reasoning
+- Authentication (all persisted/summarized records are currently shared,
+  not scoped per user)
+- Bank statement parsing (receipts, utility bills, and wallet screenshots
+  are supported)
+- Date-range filtering / pagination for insights (currently the most
+  recent 500 saved records)
 
 See [`docs/architecture.md`](docs/architecture.md) for the planned architecture  
 and [`docs/api-contract.md`](docs/api-contract.md) for future API contracts.

@@ -97,3 +97,20 @@
   output, HTTP 200 serialization, MIME rejection, quality rejection, and
   unsupported-document behavior.
 - Added ADR-0008 documenting the Review Response boundary.
+
+## Financial Calculations and AI Financial Reasoning MVP
+
+- Added `SupabaseClient.list_financial_records()` to read back saved records.
+- Added a deterministic `FinancialCalculationsService` producing a
+  `FinancialSummary` (total spend, spend by category, spend by month, top
+  merchants) with no LLM involvement.
+- Added `FinancialReasoningService`, which reasons only over the computed
+  `FinancialSummary` (never raw records) to generate narrative insights and
+  recommendations, or answer a free-form question.
+- Added `GET /api/v1/insights` (deterministic summary + AI insights) and
+  `POST /api/v1/insights/ask` (grounded natural-language Q&A).
+- Both endpoints return HTTP 503 when Supabase or OpenAI is unavailable,
+  matching the existing persistence-endpoint error convention.
+- Preserved all existing upload, save, and review-response behavior; this is
+  a purely additive read path.
+- Added ADR-0009 documenting the calculations/reasoning boundary.

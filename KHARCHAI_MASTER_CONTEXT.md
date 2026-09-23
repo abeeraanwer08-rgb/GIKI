@@ -86,6 +86,23 @@ bills and wallet screenshots. It does not invoke parsers, validators, the LLM,
 or persistence. The legacy receipt-shaped fields remain embedded in the
 response so existing clients can continue reading them.
 
+## Financial calculations and AI reasoning
+
+`FinancialCalculationsService` reads saved records from Supabase via
+`SupabaseClient.list_financial_records()` and deterministically aggregates
+them into a `FinancialSummary` — total spend, spend by category, spend by
+month, and top merchants. It does not use the LLM.
+
+`FinancialReasoningService` reasons only over the already-computed
+`FinancialSummary`, never raw records, to produce either narrative
+insights/recommendations or a direct answer to a free-form question. The
+prompt explicitly forbids inventing or recomputing figures, so every number
+the user sees stays deterministic and only the narrative is LLM-generated.
+
+Both are exposed under `/api/v1/insights` (`GET` for insights,
+`POST /ask` for Q&A), returning HTTP 503 when Supabase or OpenAI is
+unavailable, matching the existing persistence-endpoint error convention.
+
 ## Workflow conventions
 
 - Inspect the repository before every milestone change.

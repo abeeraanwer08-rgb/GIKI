@@ -79,6 +79,67 @@ unavailable.
 
 ---
 
+### GET /api/v1/insights
+
+Computes a deterministic spending summary from saved financial records and
+asks the LLM to narrate insights and recommendations grounded in that
+summary. The LLM never invents or recomputes figures.
+
+**Response — HTTP 200**
+
+```json
+{
+  "summary": {
+    "record_count": 2,
+    "total_amount": 1000.0,
+    "currency": "PKR",
+    "by_category": [
+      {"category": "groceries", "total_amount": 1000.0, "record_count": 2}
+    ],
+    "by_month": [
+      {"month": "2026-08", "total_amount": 1000.0, "record_count": 2}
+    ],
+    "top_merchants": [
+      {"category": "Karachi Grocers", "total_amount": 1000.0, "record_count": 2}
+    ]
+  },
+  "headline": "Groceries made up all of your recent spending.",
+  "insights": ["Karachi Grocers is your only merchant this period."],
+  "recommendations": ["Set a monthly groceries budget to track this trend."]
+}
+```
+
+Returns HTTP 503 when Supabase or OpenAI is unavailable.
+
+---
+
+### POST /api/v1/insights/ask
+
+Answers a free-form question grounded only in the same deterministic
+spending summary used by `GET /api/v1/insights`.
+
+**Request — `application/json`**
+
+```json
+{
+  "question": "What did I spend the most on?"
+}
+```
+
+**Response — HTTP 200**
+
+```json
+{
+  "question": "What did I spend the most on?",
+  "answer": "You spent the most on groceries, totaling PKR 1000."
+}
+```
+
+Returns HTTP 422 for a blank question and HTTP 503 when Supabase or OpenAI
+is unavailable.
+
+---
+
 ## Future Endpoints (Not Implemented)
 
 ### POST /analyze-receipt

@@ -27,8 +27,8 @@ Android Expo App
 | Structured JSON response parsing | ✅ Implemented |
 | Validation layer | ✅ Implemented |
 | Supabase persistence | ✅ Reviewed UFR save endpoint |
-| Financial Calculations | Not implemented |
-| AI Financial Reasoning | Not implemented |
+| Financial Calculations | ✅ Deterministic spending summary |
+| AI Financial Reasoning | ✅ Insights and Q&A grounded in the summary |
 
 ## Supabase foundation
 
@@ -45,3 +45,16 @@ at
 
 The reviewed-record save endpoint accepts a validated UFR and inserts it into
 `public.financial_records` without overwriting an existing record ID.
+
+## Financial calculations and AI reasoning
+
+`FinancialCalculationsService` reads saved records via
+`SupabaseClient.list_financial_records()` and deterministically aggregates
+them into a `FinancialSummary` (total spend, spend by category, spend by
+month, top merchants). No LLM is involved in this step.
+
+`FinancialReasoningService` takes only the computed `FinancialSummary` — never
+raw records — and asks the LLM to narrate insights/recommendations or answer a
+free-form question, grounded strictly in the given figures. Both are exposed
+under `/api/v1/insights` (`GET` for insights, `POST /ask` for Q&A). See
+ADR-0009.

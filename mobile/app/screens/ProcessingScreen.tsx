@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/AppNavigator';
-import { uploadDocument } from '../services/documentService';
+import { UploadError, uploadDocument } from '../services/documentService';
 import Txt from '../ui/Txt';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
@@ -29,7 +29,7 @@ export default function ProcessingScreen({ navigation, route }: Props) {
   const imageUri = capturedImages[0];
 
   const [activeStep, setActiveStep] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<UploadError | null>(null);
   const [attempt, setAttempt] = useState(0);
   const pulse = useRef(new Animated.Value(0)).current;
   const mountedRef = useRef(true);
@@ -72,9 +72,13 @@ export default function ProcessingScreen({ navigation, route }: Props) {
         if (cancelled || !mountedRef.current) return;
         navigation.replace('Review', { imageUri, capturedImages, ufr });
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         if (cancelled || !mountedRef.current) return;
-        setError('We couldn’t read this document. Check your connection, or retake the photo with better lighting.');
+        setError(
+          err instanceof UploadError
+            ? err
+            : new UploadError(null, 'Something went wrong while reading your document.', false),
+        );
       });
 
     return () => {
@@ -89,17 +93,27 @@ export default function ProcessingScreen({ navigation, route }: Props) {
   };
 
   if (error) {
+    const retake = () => navigation.goBack();
     return (
       <View style={[styles.screen, styles.centered, { paddingTop: insets.top }]}>
         <Card style={styles.errorCard}>
-          <EmptyState icon="alert-circle" tone="danger" title="Processing failed" body={error} />
-          <Button title="Try again" icon="refresh" onPress={retry} />
-          <Button
-            title="Retake photo"
-            variant="ghost"
-            onPress={() => navigation.goBack()}
-            style={styles.secondaryAction}
+          <EmptyState
+            icon={error.retakeHelps ? 'camera-reverse' : 'alert-circle'}
+            tone="danger"
+            title={error.retakeHelps ? 'We couldn’t read that photo' : 'Processing failed'}
+            body={error.userMessage}
           />
+          {error.retakeHelps ? (
+            <>
+              <Button title="Retake photo" icon="camera-reverse-outline" onPress={retake} />
+              <Button title="Try again" variant="ghost" onPress={retry} style={styles.secondaryAction} />
+            </>
+          ) : (
+            <>
+              <Button title="Try again" icon="refresh" onPress={retry} />
+              <Button title="Retake photo" variant="ghost" onPress={retake} style={styles.secondaryAction} />
+            </>
+          )}
         </Card>
       </View>
     );

@@ -218,5 +218,5 @@ class ReceiptAccuracyTests(unittest.IsolatedAsyncioTestCase):
         # The existing save validation remains deterministic while accounting
         # for the explicitly extracted service charge.
         FinancialRecordPersistenceService.validate(record)
-        payload = FinancialRecordPersistenceService.to_database_payload(record)
+        payload = FinancialRecordPersistenceService.to_database_payload(record, "user-1")
         self.assertEqual(payload["metadata"]["service_charge"], 765)

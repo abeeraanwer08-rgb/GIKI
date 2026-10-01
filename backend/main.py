@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 
+from routes.auth import router as auth_router
 from routes.budgets import router as budgets_router
 from routes.debug import router as debug_router
 from routes.financial_records import router as financial_records_router
@@ -12,6 +13,7 @@ app = FastAPI(
     version="0.1.0",
 )
 
+app.include_router(auth_router)
 app.include_router(receipt_router)
 app.include_router(financial_records_router)
 app.include_router(insights_router)

@@ -6,6 +6,8 @@ from typing import Any
 from fastapi.testclient import TestClient
 
 from main import app
+from routes.auth import get_current_user
+from services.tokens import TokenUser
 from routes.insights import (
     get_calculations_service,
     get_reasoning_service,
@@ -27,7 +29,7 @@ class FakeSupabaseClient:
         self.records = records if records is not None else []
         self.error = error
 
-    def list_financial_records(self, *, limit: int = 500) -> list[dict[str, Any]]:
+    def list_financial_records(self, user_id: str, *, limit: int = 500) -> list[dict[str, Any]]:
         if self.error is not None:
             raise self.error
         return self.records
@@ -87,6 +89,7 @@ class InsightsEndpointTests(unittest.TestCase):
             ]
         )
         self.reasoning = FakeReasoningService()
+        app.dependency_overrides[get_current_user] = lambda: TokenUser("user-1", "ali@example.com", "Ali")
         app.dependency_overrides[get_supabase_dependency] = lambda: self.supabase
         app.dependency_overrides[get_calculations_service] = (
             lambda: FinancialCalculationsService()

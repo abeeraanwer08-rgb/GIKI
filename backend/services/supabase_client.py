@@ -161,29 +161,53 @@ class SupabaseClient:
             json=payload,
         )
 
-    def list_financial_records(self, *, limit: int = 500) -> list[dict[str, Any]]:
-        """Fetch saved financial records, most recent first, for calculations."""
+    def list_financial_records(self, user_id: str, *, limit: int = 500) -> list[dict[str, Any]]:
+        """Fetch one user's saved records, most recent first, for calculations."""
         response = self.request(
             "GET",
-            f"/rest/v1/financial_records?select=*&order=transaction_date.desc.nullslast&limit={limit}",
+            "/rest/v1/financial_records?select=*"
+            f"&user_id=eq.{quote(user_id, safe='')}"
+            f"&order=transaction_date.desc.nullslast&limit={limit}",
         )
         return response.json()
 
-    def list_budgets(self) -> list[dict[str, Any]]:
-        """Fetch every category budget."""
-        return self.request("GET", "/rest/v1/budgets?select=*&order=category.asc").json()
+    def list_budgets(self, user_id: str) -> list[dict[str, Any]]:
+        """Fetch every category budget belonging to one user."""
+        return self.request(
+            "GET",
+            f"/rest/v1/budgets?select=*&user_id=eq.{quote(user_id, safe='')}&order=category.asc",
+        ).json()
 
     def upsert_budget(self, payload: dict[str, Any]) -> None:
-        """Create or replace the budget for payload['category']."""
+        """Create or replace the budget for (payload['user_id'], payload['category'])."""
         self.request(
             "POST",
-            "/rest/v1/budgets",
+            "/rest/v1/budgets?on_conflict=user_id,category",
             json=payload,
             headers={"Prefer": "resolution=merge-duplicates"},
         )
 
-    def delete_budget(self, category: str) -> None:
-        self.request("DELETE", f"/rest/v1/budgets?category=eq.{quote(category, safe='')}")
+    def delete_budget(self, user_id: str, category: str) -> None:
+        self.request(
+            "DELETE",
+            f"/rest/v1/budgets?user_id=eq.{quote(user_id, safe='')}&category=eq.{quote(category, safe='')}",
+        )
+
+    def insert_user(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Create a user; raises SupabaseConflictError when the email already exists."""
+        response = self.request(
+            "POST",
+            "/rest/v1/users",
+            json=payload,
+            headers={"Prefer": "return=representation"},
+        )
+        return response.json()[0]
+
+    def get_user_by_email(self, email: str) -> dict[str, Any] | None:
+        rows = self.request(
+            "GET", f"/rest/v1/users?select=*&email=eq.{quote(email, safe='')}&limit=1"
+        ).json()
+        return rows[0] if rows else None
 
     def close(self) -> None:
         """Release the underlying HTTP client."""

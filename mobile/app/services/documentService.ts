@@ -1,5 +1,6 @@
 import { UniversalFinancialRecord } from '../types/ufr';
 import { API_BASE_URL } from '../config/api';
+import { authHeaders, notifyIfUnauthorized } from '../auth/session';
 
 interface EditableFieldResponse {
   value?: unknown;
@@ -129,12 +130,44 @@ function getUploadMimeType(uri: string): string {
   return (extension && mimeTypes[extension]) || 'image/jpeg';
 }
 
+/** A failed scan, carrying a message that is safe and useful to show the user. */
+export class UploadError extends Error {
+  constructor(
+    public readonly status: number | null,
+    public readonly userMessage: string,
+    /** Retaking the photo can fix it (blur, wrong document) — as opposed to a server/network problem. */
+    public readonly retakeHelps: boolean,
+  ) {
+    super(userMessage);
+  }
+}
+
+function uploadErrorFor(status: number, body: unknown): UploadError {
+  const detail = (body as { detail?: { status?: string } } | null)?.detail;
+  if (status === 401) {
+    return new UploadError(status, 'Your session has expired. Please sign in again.', false);
+  }
+  if (status === 413) {
+    return new UploadError(status, 'That photo is too large. Choose one under 10 MB, or retake it.', true);
+  }
+  if (status === 415) {
+    return new UploadError(status, 'That file type isn’t supported. Use a JPEG or PNG photo.', true);
+  }
+  if (status === 400 && detail?.status === 'unsupported_document') {
+    return new UploadError(status, 'This doesn’t look like a receipt, bill or wallet screenshot.', true);
+  }
+  if (status === 400) {
+    return new UploadError(status, 'The photo is too blurry or dark to read. Try again in better light.', true);
+  }
+  return new UploadError(status, 'Something went wrong on our side. Please try again in a moment.', false);
+}
+
 export async function uploadDocument(
   imageUris: string[],
 ): Promise<UniversalFinancialRecord> {
   const imageUri = imageUris[0];
   if (!imageUri) {
-    throw new Error('No document image was selected.');
+    throw new UploadError(null, 'No document image was selected.', true);
   }
 
   const formData = new FormData();
@@ -151,10 +184,11 @@ export async function uploadDocument(
   try {
     response = await fetch(`${API_BASE_URL}/api/v1/receipt/upload`, {
       method: 'POST',
+      headers: authHeaders(),
       body: formData,
     });
   } catch {
-    throw new Error('Could not reach the server. Check your connection and try again.');
+    throw new UploadError(null, 'Could not reach the server. Check your connection and try again.', false);
   }
 
   let body: unknown;
@@ -165,7 +199,8 @@ export async function uploadDocument(
   }
 
   if (!response.ok) {
-    throw new Error(`Document processing failed (HTTP ${response.status}).`);
+    notifyIfUnauthorized(response.status);
+    throw uploadErrorFor(response.status, body);
   }
 
   return toUniversalFinancialRecord(body as UploadReviewResponse);
@@ -248,7 +283,7 @@ export async function saveFinancialRecord(
   try {
     response = await fetch(`${API_BASE_URL}/api/v1/financial-records`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify(payload),
     });
   } catch (networkError) {
@@ -263,6 +298,7 @@ export async function saveFinancialRecord(
   }
 
   if (!response.ok) {
+    notifyIfUnauthorized(response.status);
     throw new SaveError(response.status, body);
   }
 

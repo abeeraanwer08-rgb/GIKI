@@ -20,6 +20,7 @@ import {
   QualityIssue,
 } from '../utils/imageQuality';
 import Txt from '../ui/Txt';
+import { pickReceiptFromGallery } from '../utils/pickReceipt';
 import Button from '../ui/Button';
 import IconBadge from '../ui/IconBadge';
 import EmptyState from '../ui/EmptyState';
@@ -105,6 +106,12 @@ export default function CameraScreen({ navigation }: Props) {
     setPendingCapture(null);
     setQualityIssues([]);
     navigation.navigate('ReceiptPreview', { capturedImages: [uri] });
+  };
+
+  // ── Choose an existing photo instead of capturing ───────────────────────
+  const handleGallery = async () => {
+    const uri = await pickReceiptFromGallery();
+    if (uri) navigation.navigate('ReceiptPreview', { capturedImages: [uri] });
   };
 
   // ── Capture ──────────────────────────────────────────────────────────────
@@ -205,23 +212,28 @@ export default function CameraScreen({ navigation }: Props) {
         <View style={styles.glassSpacer} />
       </View>
 
-      {/* Capture button — interactive */}
+      {/* Capture controls — interactive */}
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 36 }]} pointerEvents="box-none">
-        <Pressable
-          style={({ pressed }) => [
-            styles.shutterOuter,
-            (capturing || pressed) && styles.shutterPressed,
-          ]}
-          onPress={handleCapture}
-          disabled={capturing}
-          accessibilityLabel="Take photo"
-        >
-          {capturing ? (
-            <ActivityIndicator color={colors.primary} size="small" />
-          ) : (
-            <View style={styles.shutterInner} />
-          )}
-        </Pressable>
+        <View style={styles.controlsRow} pointerEvents="box-none">
+          <Pressable
+            style={styles.sideButton}
+            onPress={handleGallery}
+            accessibilityRole="button"
+            accessibilityLabel="Choose a photo from your gallery"
+          >
+            <Ionicons name="images" size={22} color={colors.inkInverse} />
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.shutterOuter, (capturing || pressed) && styles.shutterPressed]}
+            onPress={handleCapture}
+            disabled={capturing}
+            accessibilityRole="button"
+            accessibilityLabel="Take photo"
+          >
+            {capturing ? <ActivityIndicator color={colors.primary} size="small" /> : <View style={styles.shutterInner} />}
+          </Pressable>
+          <View style={styles.sideButton} />
+        </View>
       </View>
 
       {/* ── Quality warning sheet ────────────────────────────────────────── */}
@@ -332,6 +344,21 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignItems: 'center',
+  },
+  controlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    alignSelf: 'stretch',
+    paddingHorizontal: spacing.xxxl,
+  },
+  sideButton: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   shutterOuter: {
     width: 80,

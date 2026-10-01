@@ -12,6 +12,8 @@ import {
   Inter_800ExtraBold,
 } from '@expo-google-fonts/inter';
 import AppNavigator from './app/navigation/AppNavigator';
+import AuthScreen from './app/screens/AuthScreen';
+import { AuthProvider, useAuth } from './app/auth/AuthContext';
 import Splash from './app/ui/Splash';
 import { colors } from './app/ui/theme';
 
@@ -26,6 +28,22 @@ const navigationTheme: Theme = {
     border: colors.border,
   },
 };
+
+/**
+ * Signed-out users see only the sign-in screen. The navigator is unmounted on sign-out,
+ * so no screen keeps the previous user's data in memory for the next person.
+ */
+function Root() {
+  const { status } = useAuth();
+  if (status === 'loading') return null; // the splash covers this moment
+  if (status === 'signedOut') return <AuthScreen />;
+  return (
+    <NavigationContainer theme={navigationTheme}>
+      <StatusBar style="dark" />
+      <AppNavigator />
+    </NavigationContainer>
+  );
+}
 
 export default function App() {
   const [showSplash, setShowSplash] = useState(true);
@@ -48,10 +66,9 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <NavigationContainer theme={navigationTheme}>
-        <StatusBar style="dark" />
-        <AppNavigator />
-      </NavigationContainer>
+      <AuthProvider>
+        <Root />
+      </AuthProvider>
       {showSplash && <Splash onDone={hideSplash} />}
     </SafeAreaProvider>
   );

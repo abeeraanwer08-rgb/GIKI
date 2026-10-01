@@ -63,6 +63,7 @@ class FinancialRecordPersistenceService:
         self,
         record: UniversalFinancialRecord,
         *,
+        user_id: str,
         confirm_total_mismatch: bool = False,
     ) -> None:
         """Validate and insert a UFR, preserving duplicate-ID safety.
@@ -78,7 +79,7 @@ class FinancialRecordPersistenceService:
         self.validate(record)
         self._check_total_reconciliation(record, confirm_total_mismatch)
         self._assign_category(record)
-        self.client.insert_financial_record(self.to_database_payload(record))
+        self.client.insert_financial_record(self.to_database_payload(record, user_id))
 
     def _assign_category(self, record: UniversalFinancialRecord) -> None:
         """Keep a user-chosen category; otherwise derive one so insights can group it."""
@@ -246,10 +247,11 @@ class FinancialRecordPersistenceService:
         ]
 
     @staticmethod
-    def to_database_payload(record: UniversalFinancialRecord) -> dict[str, Any]:
-        """Map UFR fields exactly to the existing financial_records columns."""
+    def to_database_payload(record: UniversalFinancialRecord, user_id: str) -> dict[str, Any]:
+        """Map UFR fields to the financial_records columns, owned by ``user_id``."""
         return {
             "id": record.record_id,
+            "user_id": user_id,
             "document_type": record.document_type,
             "source": record.metadata.source,
             "transaction_date": record.document_date,

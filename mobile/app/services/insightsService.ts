@@ -1,4 +1,5 @@
 import { API_BASE_URL } from '../config/api';
+import { authHeaders, notifyIfUnauthorized } from '../auth/session';
 import {
   AskResponse,
   BudgetOverview,
@@ -19,12 +20,16 @@ export class ApiError extends Error {
 async function getJson<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(`${API_BASE_URL}${path}`, init);
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...init,
+      headers: { ...authHeaders(), ...(init?.headers as Record<string, string> | undefined) },
+    });
   } catch {
     throw new Error('Could not reach the server. Check your connection and try again.');
   }
 
   if (!response.ok) {
+    notifyIfUnauthorized(response.status);
     throw new ApiError(response.status, `Request failed with HTTP ${response.status}.`);
   }
 

@@ -6,6 +6,8 @@ from typing import Any
 from fastapi.testclient import TestClient
 
 from main import app
+from routes.auth import get_current_user
+from services.tokens import TokenUser
 from schemas.ufr import (
     UniversalFinancialRecord,
     UniversalFinancialRecordItem,
@@ -40,7 +42,7 @@ class FakeSupabaseClient:
             raise self.error
         self.payloads.append(payload)
 
-    def list_financial_records(self, *, limit: int = 500) -> list[dict[str, Any]]:
+    def list_financial_records(self, user_id: str, *, limit: int = 500) -> list[dict[str, Any]]:
         if self.error is not None:
             raise self.error
         return self.records
@@ -116,6 +118,7 @@ class FinancialRecordEndpointTests(unittest.TestCase):
             get_financial_record_persistence_service
         ] = lambda: self.persistence
         app.dependency_overrides[get_supabase_dependency] = lambda: self.client
+        app.dependency_overrides[get_current_user] = lambda: TokenUser("user-1", "ali@example.com", "Ali")
         self.http = TestClient(app)
 
     def tearDown(self) -> None:

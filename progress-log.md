@@ -208,3 +208,15 @@
 - Review: replaced the plain "Saved" alert with an animated success sheet that
   shows the category the expense was filed under, with "Done" and
   "Scan another receipt".
+
+## Accounts, Sign-in and Sturdier Receipt Scanning
+
+- Added sign-up / sign-in (`/api/v1/auth/*`), scrypt hashing and signed tokens;
+  all data routes now require a token and are scoped to the caller. Added
+  migration `20260924000000_add_users_and_ownership.sql` and ADR-0011.
+- Mobile: auth screen with validation and show/hide password, session kept in
+  secure storage, profile sheet with sign-out, personalised greeting.
+- Receipts: import from the photo library as well as the camera; 10 MB upload
+  limit (413); scan failures give specific guidance and a retake-or-retry choice.
+- 18 new backend tests (84 total), including per-user isolation and anonymous
+  access refusal on every data route.

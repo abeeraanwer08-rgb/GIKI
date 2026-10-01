@@ -5,12 +5,20 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "platforms": ["android"],
+    "platforms": [
+      "android"
+    ],
     "plugins": [
       [
         "expo-camera",
         {
           "cameraPermission": "HissabAI needs your camera to scan receipts."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "HissabAI lets you choose a receipt photo from your library."
         }
       ]
     ],

@@ -16,6 +16,20 @@ Returns the health status of the backend.
 
 ---
 
+### Authentication
+
+`POST /api/v1/auth/signup` (`{name, email, password≥8}`) → **201** and
+`POST /api/v1/auth/login` (`{email, password}`) → **200**, both returning
+`{"token": "...", "user": {"id", "name", "email"}}`. Duplicate email → 409,
+bad input → 422, wrong credentials → 401 (identical for unknown email),
+server missing `AUTH_JWT_SECRET` → 503. `GET /api/v1/auth/me` returns the user.
+
+Every endpoint below except `/health` requires `Authorization: Bearer <token>`
+and returns **401** without a valid one. Data is scoped to the signed-in user.
+`POST /api/v1/receipt/upload` additionally returns **413** above 10 MB.
+
+---
+
 ### POST /api/v1/financial-records
 
 Saves a user-approved `UniversalFinancialRecord` after validation. This

@@ -10,12 +10,12 @@ Roman Urdu.
 
 ## Credits and contributions
 
-HissabAI builds on the **KharchAI** codebase by
-[zara1990](https://github.com/zara1990/Kharchai), which provided the FastAPI
-document pipeline (receipt, utility-bill and wallet-screenshot parsing,
-validation, confidence scoring, review hints), Supabase persistence, and the
-original Expo mobile app (receipt capture, review and save flow). The original
-commit history is preserved in this repository.
+HissabAI builds on **KharchAI**, an earlier team codebase used with its
+authors' permission. It provided the FastAPI document pipeline (receipt,
+utility-bill and wallet-screenshot parsing, validation, confidence scoring,
+review hints), Supabase persistence, and the original Expo mobile app (receipt
+capture, review and save flow). The original commit history is preserved in
+this repository.
 
 Work added on top of that base in this repository:
 
@@ -39,6 +39,19 @@ Work added on top of that base in this repository:
   a floating add button, donut chart, and a redesigned scan → review flow.
 
 ---
+
+## Accounts and sign-in
+
+Every user has a private account. `POST /api/v1/auth/signup` and `/login` return
+a signed token that the mobile app keeps in the device's secure store; every
+data route requires it and only ever reads or writes the caller's own records
+and budgets. Passwords are hashed with scrypt, and login gives the same answer
+for a wrong password and an unknown email. See
+[`docs/adr/0011-accounts-and-per-user-data.md`](docs/adr/0011-accounts-and-per-user-data.md).
+
+Receipts can be scanned with the camera or imported from the photo library.
+Uploads over 10 MB are rejected, and failed scans explain whether retaking the
+photo will help.
 
 ## Current Milestone: Budgets, Smart Categorisation and Bilingual Assistant
 
@@ -123,13 +136,17 @@ The backend requires these server-side environment values:
 ```text
 SUPABASE_URL
 SUPABASE_SERVICE_ROLE_KEY
+AUTH_JWT_SECRET   # at least 32 random characters, e.g. `openssl rand -hex 32`
 ```
 
-Never expose `SUPABASE_SERVICE_ROLE_KEY` to Android or API clients. Apply both
+Never expose `SUPABASE_SERVICE_ROLE_KEY` to Android or API clients. Apply the
 migrations in order:
 
 1. [`supabase/migrations/20260811000000_create_financial_records.sql`](supabase/migrations/20260811000000_create_financial_records.sql)
 2. [`supabase/migrations/20260923000000_create_budgets.sql`](supabase/migrations/20260923000000_create_budgets.sql)
+3. [`supabase/migrations/20260924000000_add_users_and_ownership.sql`](supabase/migrations/20260924000000_add_users_and_ownership.sql)
+   (adds `users` and per-user ownership; records and budgets saved before this
+   migration have no owner and are not shown to anyone)
 
 ## What is NOT implemented yet
 

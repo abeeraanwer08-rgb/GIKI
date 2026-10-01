@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from routes.auth import get_current_user
 from schemas.insights import AskRequest, AskResponse, InsightsResponse
 from services.financial_calculations import FinancialCalculationsService, FinancialSummary
 from services.financial_reasoning import FinancialReasoningError, FinancialReasoningService
@@ -11,6 +12,7 @@ from services.supabase_client import (
     SupabaseConnectionError,
     get_supabase_client,
 )
+from services.tokens import TokenUser
 
 router = APIRouter(
     prefix="/api/v1/insights",
@@ -34,10 +36,10 @@ def get_supabase_dependency() -> SupabaseClient:
 
 
 def _load_summary(
-    supabase: SupabaseClient, calculations: FinancialCalculationsService
+    supabase: SupabaseClient, calculations: FinancialCalculationsService, user_id: str
 ):
     try:
-        records = supabase.list_financial_records()
+        records = supabase.list_financial_records(user_id)
     except (SupabaseConfigurationError, SupabaseConnectionError) as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -56,10 +58,11 @@ def _load_summary(
     ),
 )
 def get_summary(
+    user: TokenUser = Depends(get_current_user),
     supabase: SupabaseClient = Depends(get_supabase_dependency),
     calculations: FinancialCalculationsService = Depends(get_calculations_service),
 ) -> FinancialSummary:
-    return _load_summary(supabase, calculations)
+    return _load_summary(supabase, calculations, user.id)
 
 
 @router.get(
@@ -75,11 +78,12 @@ def get_summary(
     ),
 )
 async def get_insights(
+    user: TokenUser = Depends(get_current_user),
     supabase: SupabaseClient = Depends(get_supabase_dependency),
     calculations: FinancialCalculationsService = Depends(get_calculations_service),
     reasoning: FinancialReasoningService = Depends(get_reasoning_service),
 ) -> InsightsResponse:
-    summary = _load_summary(supabase, calculations)
+    summary = _load_summary(supabase, calculations, user.id)
 
     try:
         generated = await reasoning.generate_insights(summary)
@@ -108,6 +112,7 @@ async def get_insights(
 )
 async def ask_insights(
     request: AskRequest,
+    user: TokenUser = Depends(get_current_user),
     supabase: SupabaseClient = Depends(get_supabase_dependency),
     calculations: FinancialCalculationsService = Depends(get_calculations_service),
     reasoning: FinancialReasoningService = Depends(get_reasoning_service),
@@ -118,7 +123,7 @@ async def ask_insights(
             detail={"error": "question must not be blank."},
         )
 
-    summary = _load_summary(supabase, calculations)
+    summary = _load_summary(supabase, calculations, user.id)
 
     try:
         generated = await reasoning.answer_question(summary, request.question)

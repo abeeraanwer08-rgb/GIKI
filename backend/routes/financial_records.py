@@ -7,6 +7,7 @@ from schemas.financial_record import (
     FinancialRecordSaveResponse,
     to_summary,
 )
+from routes.auth import get_current_user
 from schemas.ufr import UniversalFinancialRecord
 from services.categorization import CategorizationService
 from services.financial_record_persistence import (
@@ -21,6 +22,7 @@ from services.supabase_client import (
     SupabaseConnectionError,
     get_supabase_client,
 )
+from services.tokens import TokenUser
 
 router = APIRouter(
     prefix="/api/v1/financial-records",
@@ -51,10 +53,11 @@ def get_supabase_dependency() -> SupabaseClient:
     ),
 )
 def list_financial_records(
+    user: TokenUser = Depends(get_current_user),
     supabase: SupabaseClient = Depends(get_supabase_dependency),
 ) -> FinancialRecordListResponse:
     try:
-        rows = supabase.list_financial_records()
+        rows = supabase.list_financial_records(user.id)
     except (SupabaseConfigurationError, SupabaseConnectionError) as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -83,13 +86,14 @@ def list_financial_records(
 )
 def save_financial_record(
     record: UniversalFinancialRecord,
+    user: TokenUser = Depends(get_current_user),
     persistence_service: FinancialRecordPersistenceService = Depends(
         get_financial_record_persistence_service
     ),
 ) -> FinancialRecordSaveResponse:
     confirm = bool(record.metadata.confirm_total_mismatch)
     try:
-        persistence_service.save(record, confirm_total_mismatch=confirm)
+        persistence_service.save(record, user_id=user.id, confirm_total_mismatch=confirm)
     except FinancialRecordTotalMismatchWarning as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

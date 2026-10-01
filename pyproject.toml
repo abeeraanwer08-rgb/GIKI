@@ -8,6 +8,7 @@ dependencies = [
     "httpx>=0.28.1",
     "openai>=2.51.0",
     "opencv-python-headless>=5.0.0.93",
+    "pyjwt>=2.8.0",
     "python-multipart>=0.0.32",
     "uvicorn>=0.52.0",
 ]

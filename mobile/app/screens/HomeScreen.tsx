@@ -11,6 +11,8 @@ import { BudgetOverview, FinancialRecordSummary, MonthForecast } from '../types/
 import { fetchBudgets, fetchFinancialRecords, fetchSummary } from '../services/insightsService';
 import TransactionRow from '../components/home/TransactionRow';
 import TransactionSheet from '../components/home/TransactionSheet';
+import ProfileSheet, { Avatar } from '../components/home/ProfileSheet';
+import { useAuth } from '../auth/AuthContext';
 import { haptics } from '../ui/haptics';
 import { getCategoryStyle } from '../utils/categoryStyle';
 import { capitalize, dayLabel, formatMoney, greeting, isSameMonth } from '../utils/format';
@@ -52,6 +54,8 @@ function groupByDay(records: FinancialRecordSummary[]) {
 
 export default function HomeScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
+  const { user, signOut } = useAuth();
+  const [profileOpen, setProfileOpen] = useState(false);
   const [records, setRecords] = useState<FinancialRecordSummary[]>([]);
   const [state, setState] = useState<LoadState>('loading');
   const [refreshing, setRefreshing] = useState(false);
@@ -151,18 +155,18 @@ export default function HomeScreen({ navigation }: Props) {
             </Txt>
             <View style={styles.flex} />
             <Pressable
-              onPress={() => navigation.navigate('Insights')}
-              style={styles.heroIconButton}
+              onPress={() => setProfileOpen(true)}
               accessibilityRole="button"
-          accessibilityLabel="Open insights"
+              accessibilityLabel="Open profile"
               hitSlop={8}
             >
-              <Ionicons name="sparkles" size={18} color={colors.inkInverse} />
+              <Avatar name={user?.name ?? ''} />
             </Pressable>
           </View>
 
           <Txt variant="caption" color={colors.inkInverseMuted} style={styles.greeting}>
             {greeting()}
+            {user ? `, ${user.name.trim().split(/\s+/)[0]}` : ''}
           </Txt>
           <Txt variant="title" color={colors.inkInverse}>
             Here’s your spending
@@ -396,6 +400,16 @@ export default function HomeScreen({ navigation }: Props) {
         </View>
       </ScrollView>
 
+      <ProfileSheet
+        user={user}
+        visible={profileOpen}
+        onClose={() => setProfileOpen(false)}
+        onSignOut={() => {
+          setProfileOpen(false);
+          signOut();
+        }}
+      />
+
       <TransactionSheet
         record={selected}
         budgetedCategories={budgets?.budgets.map((b) => b.category) ?? []}
@@ -423,14 +437,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-  },
-  heroIconButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(255,255,255,0.14)',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   greeting: { marginTop: spacing.xxl },
   balanceCard: {

@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/AppNavigator';
+import { pickReceiptFromGallery } from '../utils/pickReceipt';
 import Txt from '../ui/Txt';
 import Card from '../ui/Card';
 import IconBadge from '../ui/IconBadge';
@@ -18,6 +19,11 @@ const TIPS: { icon: keyof typeof Ionicons.glyphMap; title: string; body: string 
 ];
 
 export default function AddExpenseScreen({ navigation }: Props) {
+  const chooseFromGallery = async () => {
+    const uri = await pickReceiptFromGallery();
+    if (uri) navigation.navigate('ReceiptPreview', { capturedImages: [uri] });
+  };
+
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Txt variant="title">How would you like to add it?</Txt>
@@ -45,6 +51,19 @@ export default function AddExpenseScreen({ navigation }: Props) {
             </Txt>
           </View>
           <Ionicons name="chevron-forward" size={20} color={colors.primary} />
+        </Card>
+      </Pressable>
+
+      <Pressable onPress={chooseFromGallery} style={({ pressed }) => [pressed && styles.pressed]}>
+        <Card style={styles.option}>
+          <IconBadge icon="images" color={colors.info} tint={colors.infoSoft} size={52} />
+          <View style={styles.optionText}>
+            <Txt variant="heading">Choose from gallery</Txt>
+            <Txt variant="caption" color={colors.inkSecondary}>
+              Use a receipt photo you already have
+            </Txt>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.inkMuted} />
         </Card>
       </Pressable>
 

@@ -8,6 +8,8 @@ import httpx
 from fastapi.testclient import TestClient
 
 from main import app
+from routes.auth import get_current_user
+from services.tokens import TokenUser
 from routes.budgets import get_budget_service, get_supabase_dependency
 from services.budgets import BudgetService
 from services.supabase_client import SupabaseClient, SupabaseConnectionError
@@ -67,11 +69,11 @@ class FakeBudgetStore:
         if self.error:
             raise self.error
 
-    def list_budgets(self) -> list[dict[str, Any]]:
+    def list_budgets(self, user_id: str) -> list[dict[str, Any]]:
         self._check()
         return list(self.budgets.values())
 
-    def list_financial_records(self, *, limit: int = 500) -> list[dict[str, Any]]:
+    def list_financial_records(self, user_id: str, *, limit: int = 500) -> list[dict[str, Any]]:
         self._check()
         return [{"amount": 400.0, "category": "groceries", "transaction_date": date.today().isoformat()}]
 
@@ -79,7 +81,7 @@ class FakeBudgetStore:
         self._check()
         self.budgets[payload["category"]] = payload
 
-    def delete_budget(self, category: str) -> None:
+    def delete_budget(self, user_id: str, category: str) -> None:
         self._check()
         self.budgets.pop(category, None)
 
@@ -89,6 +91,7 @@ class BudgetEndpointTests(unittest.TestCase):
         self.store = FakeBudgetStore()
         app.dependency_overrides[get_supabase_dependency] = lambda: self.store
         app.dependency_overrides[get_budget_service] = lambda: BudgetService()
+        app.dependency_overrides[get_current_user] = lambda: TokenUser("user-1", "ali@example.com", "Ali")
         self.http = TestClient(app)
 
     def tearDown(self) -> None:
@@ -137,13 +140,15 @@ class SupabaseBudgetRequestTests(unittest.TestCase):
                 base_url="https://example.supabase.co", transport=httpx.MockTransport(handler)
             ),
         )
-        client.upsert_budget({"category": "groceries", "monthly_limit": 1000})
-        client.delete_budget("groceries")
+        client.upsert_budget({"user_id": "user-1", "category": "groceries", "monthly_limit": 1000})
+        client.delete_budget("user-1", "groceries")
 
         self.assertEqual(seen[0].headers["prefer"], "resolution=merge-duplicates")
         self.assertEqual(seen[0].headers["apikey"], "server-key")
         self.assertEqual(seen[1].method, "DELETE")
         self.assertEqual(seen[1].url.params["category"], "eq.groceries")
+        self.assertEqual(seen[1].url.params["user_id"], "eq.user-1")
+        self.assertEqual(seen[0].url.params["on_conflict"], "user_id,category")
         client.close()
 
 

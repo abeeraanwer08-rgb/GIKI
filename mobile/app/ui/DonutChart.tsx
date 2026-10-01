@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import Svg, { Circle, G } from 'react-native-svg';
+import { useCountUp } from './motion';
 import { colors } from './theme';
 
 export type DonutSegment = { key: string; value: number; color: string };
@@ -19,6 +20,8 @@ export default function DonutChart({ segments, size = 180, thickness = 20, child
   const c = 2 * Math.PI * r;
   const total = segments.reduce((sum, s) => sum + s.value, 0);
   const gap = segments.length > 1 ? GAP : 0;
+  // 0 → 1 over ~1s; scales every arc so the ring draws itself in.
+  const sweep = useCountUp(1, 1000);
 
   let offset = 0;
   const arcs = segments
@@ -28,8 +31,8 @@ export default function DonutChart({ segments, size = 180, thickness = 20, child
       const arc = {
         key: s.key,
         color: s.color,
-        dash: `${Math.max(length - gap, 0.01)} ${c}`,
-        offset: -offset,
+        dash: `${Math.max((length - gap) * sweep, 0.01)} ${c}`,
+        offset: -offset * sweep,
       };
       offset += length;
       return arc;

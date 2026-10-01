@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { DefaultTheme, NavigationContainer, Theme } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -12,6 +12,7 @@ import {
   Inter_800ExtraBold,
 } from '@expo-google-fonts/inter';
 import AppNavigator from './app/navigation/AppNavigator';
+import Splash from './app/ui/Splash';
 import { colors } from './app/ui/theme';
 
 const navigationTheme: Theme = {
@@ -27,6 +28,8 @@ const navigationTheme: Theme = {
 };
 
 export default function App() {
+  const [showSplash, setShowSplash] = useState(true);
+  const hideSplash = useCallback(() => setShowSplash(false), []);
   const [fontsLoaded] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
@@ -49,6 +52,7 @@ export default function App() {
         <StatusBar style="dark" />
         <AppNavigator />
       </NavigationContainer>
+      {showSplash && <Splash onDone={hideSplash} />}
     </SafeAreaProvider>
   );
 }

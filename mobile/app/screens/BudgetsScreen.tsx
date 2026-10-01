@@ -1,10 +1,12 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { RouteProp, useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
+import { TabParamList } from '../navigation/AppNavigator';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { BudgetOverview, BudgetState, BudgetStatus } from '../types/insights';
+import { haptics } from '../ui/haptics';
 import { deleteBudget, fetchBudgets, setBudget } from '../services/insightsService';
 import BudgetSheet from '../components/budgets/BudgetSheet';
 import { getCategoryStyle } from '../utils/categoryStyle';
@@ -15,6 +17,7 @@ import IconBadge from '../ui/IconBadge';
 import EmptyState from '../ui/EmptyState';
 import Skeleton from '../ui/Skeleton';
 import FocusStatusBar from '../ui/FocusStatusBar';
+import { AnimatedBar, FadeIn, useCountUp } from '../ui/motion';
 import { colors, fonts, gradients, radius, spacing } from '../ui/theme';
 
 type LoadState = 'loading' | 'loaded' | 'error';
@@ -25,7 +28,17 @@ const STATE_STYLE: Record<BudgetState, { color: string; tint: string; label: str
   over: { color: colors.danger, tint: colors.dangerSoft, label: 'Over budget' },
 };
 
-function BudgetRow({ budget, currency, onPress }: { budget: BudgetStatus; currency: string; onPress: () => void }) {
+function BudgetRow({
+  budget,
+  currency,
+  index,
+  onPress,
+}: {
+  budget: BudgetStatus;
+  currency: string;
+  index: number;
+  onPress: () => void;
+}) {
   const style = getCategoryStyle(budget.category);
   const state = STATE_STYLE[budget.status];
   const over = budget.remaining < 0;
@@ -48,11 +61,11 @@ function BudgetRow({ budget, currency, onPress }: { budget: BudgetStatus; curren
           </View>
         </View>
         <View style={styles.track}>
-          <View
-            style={[
-              styles.fill,
-              { width: `${Math.min(Math.max(budget.percent_used, 2), 100)}%`, backgroundColor: state.color },
-            ]}
+          <AnimatedBar
+            percent={budget.percent_used}
+            color={state.color}
+            trackColor={colors.surfaceMuted}
+            delay={index * 80}
           />
         </View>
         <View style={styles.budgetBottom}>
@@ -72,6 +85,9 @@ function BudgetRow({ budget, currency, onPress }: { budget: BudgetStatus; curren
 
 export default function BudgetsScreen() {
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
+  const route = useRoute<RouteProp<TabParamList, 'Budgets'>>();
+  const [presetCategory, setPresetCategory] = useState<string | null>(null);
   const [overview, setOverview] = useState<BudgetOverview | null>(null);
   const [state, setState] = useState<LoadState>('loading');
   const [refreshing, setRefreshing] = useState(false);
@@ -98,7 +114,23 @@ export default function BudgetsScreen() {
     }, [load]),
   );
 
+  // Arriving from a transaction: open the sheet on that category (or edit its existing budget).
+  const requested = route.params?.newBudgetCategory;
+  useEffect(() => {
+    if (!requested || state !== 'loaded') return;
+    const existing = overview?.budgets.find((b) => b.category === requested);
+    if (existing) {
+      openSheet(existing);
+    } else {
+      setPresetCategory(requested);
+      openSheet(null);
+    }
+    navigation.setParams({ newBudgetCategory: undefined } as never);
+    // Runs when a category is requested and data is ready.
+  }, [requested, state]);
+
   const openSheet = (budget: BudgetStatus | null) => {
+    if (budget) setPresetCategory(null);
     setEditing(budget ? { category: budget.category, monthlyLimit: budget.monthly_limit } : null);
     setSheetError(null);
     setSheetOpen(true);
@@ -111,6 +143,7 @@ export default function BudgetsScreen() {
       setOverview(await action());
       setState('loaded');
       setSheetOpen(false);
+      haptics.success();
     } catch {
       setSheetError('Could not save the budget. Check your connection and try again.');
     } finally {
@@ -120,6 +153,7 @@ export default function BudgetsScreen() {
 
   const currency = overview?.currency ?? 'PKR';
   const budgets = overview?.budgets ?? [];
+  const animatedSpent = useCountUp(overview?.total_spent ?? 0);
   const totalPercent =
     overview && overview.total_limit > 0 ? (overview.total_spent / overview.total_limit) * 100 : 0;
 
@@ -198,19 +232,14 @@ export default function BudgetsScreen() {
               </Txt>
               <View style={styles.summaryAmounts}>
                 <Txt variant="display" color={colors.inkInverse}>
-                  {formatMoney(overview!.total_spent, null)}
+                  {formatMoney(animatedSpent, null)}
                 </Txt>
                 <Txt variant="body" color={colors.inkInverseMuted} style={styles.summaryOf}>
                   of {formatMoney(overview!.total_limit, currency)}
                 </Txt>
               </View>
               <View style={styles.summaryTrack}>
-                <View
-                  style={[
-                    styles.fill,
-                    { width: `${Math.min(Math.max(totalPercent, 2), 100)}%`, backgroundColor: colors.gold },
-                  ]}
-                />
+                <AnimatedBar percent={totalPercent} color={colors.gold} trackColor="transparent" />
               </View>
               <View style={styles.summaryFooter}>
                 <Ionicons
@@ -227,8 +256,10 @@ export default function BudgetsScreen() {
             </LinearGradient>
 
             <View style={styles.list}>
-              {budgets.map((b) => (
-                <BudgetRow key={b.category} budget={b} currency={currency} onPress={() => openSheet(b)} />
+              {budgets.map((b, i) => (
+                <FadeIn key={b.category} index={i + 1}>
+                  <BudgetRow budget={b} currency={currency} index={i} onPress={() => openSheet(b)} />
+                </FadeIn>
               ))}
             </View>
           </>
@@ -239,6 +270,7 @@ export default function BudgetsScreen() {
         visible={sheetOpen}
         editing={editing}
         taken={budgets.map((b) => b.category)}
+        initialCategory={presetCategory}
         saving={saving}
         error={sheetError}
         onClose={() => setSheetOpen(false)}
@@ -289,7 +321,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginTop: spacing.lg,
   },
-  fill: { height: '100%', borderRadius: 4 },
   budgetBottom: { flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.sm },
   stateLabel: { fontFamily: fonts.semibold },
   pressed: { opacity: 0.85, transform: [{ scale: 0.99 }] },

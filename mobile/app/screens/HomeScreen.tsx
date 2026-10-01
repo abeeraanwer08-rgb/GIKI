@@ -10,6 +10,8 @@ import { RootStackParamList, TabParamList } from '../navigation/AppNavigator';
 import { BudgetOverview, FinancialRecordSummary, MonthForecast } from '../types/insights';
 import { fetchBudgets, fetchFinancialRecords, fetchSummary } from '../services/insightsService';
 import TransactionRow from '../components/home/TransactionRow';
+import TransactionSheet from '../components/home/TransactionSheet';
+import { haptics } from '../ui/haptics';
 import { getCategoryStyle } from '../utils/categoryStyle';
 import { capitalize, dayLabel, formatMoney, greeting, isSameMonth } from '../utils/format';
 import Txt from '../ui/Txt';
@@ -19,7 +21,9 @@ import SectionHeader from '../ui/SectionHeader';
 import EmptyState from '../ui/EmptyState';
 import Skeleton from '../ui/Skeleton';
 import FocusStatusBar from '../ui/FocusStatusBar';
-import { colors, gradients, radius, spacing } from '../ui/theme';
+import Logo from '../ui/Logo';
+import { FadeIn, useCountUp } from '../ui/motion';
+import { colors, fonts, gradients, radius, spacing } from '../ui/theme';
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<TabParamList, 'Home'>,
@@ -29,6 +33,11 @@ type Props = CompositeScreenProps<
 type LoadState = 'loading' | 'loaded' | 'error';
 
 type CategoryShare = { category: string; amount: number; share: number; color: string };
+
+/** Count up only once data has arrived, so the skeleton never flashes a stale 0. */
+function loadedTotal(state: LoadState, total: number): number {
+  return state === 'loaded' ? total : 0;
+}
 
 function groupByDay(records: FinancialRecordSummary[]) {
   const groups: { label: string; items: FinancialRecordSummary[] }[] = [];
@@ -48,6 +57,8 @@ export default function HomeScreen({ navigation }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [forecast, setForecast] = useState<MonthForecast | null>(null);
   const [budgets, setBudgets] = useState<BudgetOverview | null>(null);
+  const [selected, setSelected] = useState<FinancialRecordSummary | null>(null);
+  const [filter, setFilter] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     // Forecast and budgets are extras: Home still works if either is unavailable.
@@ -97,7 +108,16 @@ export default function HomeScreen({ navigation }: Props) {
       .sort((a, b) => b.amount - a.amount);
   }, [records]);
 
-  const groups = useMemo(() => groupByDay(records), [records]);
+  const filterOptions = useMemo(
+    () => [...new Set(records.map((r) => r.category).filter((c): c is string => !!c))],
+    [records],
+  );
+  const visibleRecords = useMemo(
+    () => (filter ? records.filter((r) => r.category === filter) : records),
+    [records, filter],
+  );
+  const groups = useMemo(() => groupByDay(visibleRecords), [visibleRecords]);
+  const animatedMonthTotal = useCountUp(loadedTotal(state, monthTotal));
   const loading = state === 'loading';
 
   return (
@@ -125,9 +145,7 @@ export default function HomeScreen({ navigation }: Props) {
           style={[styles.hero, { paddingTop: insets.top + spacing.lg }]}
         >
           <View style={styles.brandRow}>
-            <View style={styles.brandMark}>
-              <Ionicons name="calculator" size={16} color={colors.inkInverse} />
-            </View>
+            <Logo size={32} />
             <Txt variant="bodyStrong" color={colors.inkInverse}>
               HissabAI
             </Txt>
@@ -158,7 +176,7 @@ export default function HomeScreen({ navigation }: Props) {
               <Skeleton width={180} height={38} style={styles.skeletonOnDark} />
             ) : (
               <Txt variant="display" color={colors.inkInverse} style={styles.balance}>
-                {formatMoney(monthTotal, currency)}
+                {formatMoney(animatedMonthTotal, currency)}
               </Txt>
             )}
             {forecast && forecast.projected_total > 0 && (
@@ -242,7 +260,7 @@ export default function HomeScreen({ navigation }: Props) {
           )}
 
           {/* ── Quick actions ──────────────────────────────────── */}
-          <View style={styles.actions}>
+          <FadeIn index={1} style={styles.actions}>
             <Pressable
               style={({ pressed }) => [styles.actionPress, pressed && styles.pressed]}
               onPress={() => navigation.navigate('Camera')}
@@ -271,7 +289,7 @@ export default function HomeScreen({ navigation }: Props) {
                 </Txt>
               </Card>
             </Pressable>
-          </View>
+          </FadeIn>
 
           {/* ── Activity ───────────────────────────────────────── */}
           <SectionHeader
@@ -282,6 +300,42 @@ export default function HomeScreen({ navigation }: Props) {
                 : undefined
             }
           />
+
+          {state === 'loaded' && filterOptions.length > 1 && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterRow}
+              style={styles.filterScroll}
+            >
+              {[null, ...filterOptions].map((c) => {
+                const active = c === filter;
+                const cat = c ? getCategoryStyle(c) : null;
+                const tint = cat?.color ?? colors.primary;
+                return (
+                  <Pressable
+                    key={c ?? 'all'}
+                    onPress={() => {
+                      haptics.tap();
+                      setFilter(c);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    style={[styles.filterChip, active && { backgroundColor: tint, borderColor: tint }]}
+                  >
+                    {cat && <Ionicons name={cat.icon} size={14} color={active ? colors.inkInverse : tint} />}
+                    <Txt
+                      variant="caption"
+                      color={active ? colors.inkInverse : colors.inkSecondary}
+                      style={[styles.filterText, cat && styles.filterTextIcon]}
+                    >
+                      {c ? capitalize(c) : 'All'}
+                    </Txt>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          )}
 
           {loading ? (
             <Card>
@@ -320,8 +374,8 @@ export default function HomeScreen({ navigation }: Props) {
               />
             </Card>
           ) : (
-            groups.map((group) => (
-              <View key={group.label} style={styles.group}>
+            groups.map((group, gi) => (
+              <FadeIn key={group.label} index={gi + 2} style={styles.group}>
                 <Txt variant="overline" color={colors.inkMuted} style={styles.groupLabel}>
                   {group.label}
                 </Txt>
@@ -332,14 +386,25 @@ export default function HomeScreen({ navigation }: Props) {
                       record={record}
                       isFirst={i === 0}
                       isLast={i === group.items.length - 1}
+                      onPress={setSelected}
                     />
                   ))}
                 </Card>
-              </View>
+              </FadeIn>
             ))
           )}
         </View>
       </ScrollView>
+
+      <TransactionSheet
+        record={selected}
+        budgetedCategories={budgets?.budgets.map((b) => b.category) ?? []}
+        onClose={() => setSelected(null)}
+        onSetBudget={(category) => {
+          setSelected(null);
+          navigation.navigate('Budgets', { newBudgetCategory: category });
+        }}
+      />
     </View>
   );
 }
@@ -358,14 +423,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-  },
-  brandMark: {
-    width: 30,
-    height: 30,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.16)',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   heroIconButton: {
     width: 38,
@@ -445,6 +502,20 @@ const styles = StyleSheet.create({
   actionCard: { padding: spacing.lg },
   actionTitle: { marginTop: spacing.md },
   pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
+  filterScroll: { marginHorizontal: -spacing.xl, marginBottom: spacing.md },
+  filterRow: { paddingHorizontal: spacing.xl, gap: spacing.sm },
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  filterText: { fontFamily: fonts.medium },
+  filterTextIcon: { marginLeft: 5 },
   group: { marginBottom: spacing.lg },
   groupLabel: { marginBottom: spacing.sm, marginLeft: spacing.xs },
   skeletonRow: {

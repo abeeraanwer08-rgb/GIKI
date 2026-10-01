@@ -189,3 +189,22 @@
   box moved there from Insights.
 - Four-tab navigation: Home, Budgets, Insights, Assistant.
 - 21 new backend tests (66 total). Added ADR-0010.
+
+## Motion, Haptics and Interaction Polish
+
+- Added a motion toolkit (`ui/motion.tsx`): staggered `FadeIn` entrances, an
+  animated count-up for headline amounts, and `AnimatedBar` progress bars.
+  The count-up uses `performance.now()` so a device clock change cannot
+  stall or skip it.
+- Added a vector `Logo` mark and an animated brand splash shown at launch.
+- Added haptic feedback (`expo-haptics`) on buttons, tab presses, filter chips,
+  transaction taps and successful saves; it no-ops where unsupported.
+- Home: tappable transactions open a detail sheet with a "Set / Edit budget"
+  action that opens the Budgets tab pre-selected on that category; category
+  filter chips; staggered section entrances.
+- Budgets: animated progress bars and total; the add sheet scrolls a preset
+  category into view.
+- Insights: the donut ring draws itself in; forecast bar animates.
+- Review: replaced the plain "Saved" alert with an animated success sheet that
+  shows the category the expense was filed under, with "Done" and
+  "Scan another receipt".

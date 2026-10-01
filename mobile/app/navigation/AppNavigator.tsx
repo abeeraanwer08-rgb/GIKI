@@ -17,7 +17,8 @@ import { colors, fonts } from '../ui/theme';
 
 export type TabParamList = {
   Home: undefined;
-  Budgets: undefined;
+  /** `newBudgetCategory` opens the budget sheet pre-selected on that category. */
+  Budgets: { newBudgetCategory?: string } | undefined;
   Insights: undefined;
   Assistant: undefined;
 };

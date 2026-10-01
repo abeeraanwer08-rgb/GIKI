@@ -20,6 +20,7 @@ import Skeleton from '../ui/Skeleton';
 import DonutChart from '../ui/DonutChart';
 import Button from '../ui/Button';
 import FocusStatusBar from '../ui/FocusStatusBar';
+import { AnimatedBar, FadeIn } from '../ui/motion';
 import { colors, fonts, gradients, radius, spacing } from '../ui/theme';
 
 type Props = CompositeScreenProps<
@@ -151,11 +152,11 @@ export default function InsightsScreen({ navigation }: Props) {
               </View>
             </View>
             <View style={styles.forecastTrack}>
-              <View
-                style={[
-                  styles.forecastFill,
-                  { width: `${Math.round((forecast.days_elapsed / forecast.days_in_month) * 100)}%` },
-                ]}
+              <AnimatedBar
+                percent={(forecast.days_elapsed / forecast.days_in_month) * 100}
+                color={colors.info}
+                trackColor="transparent"
+                height={6}
               />
             </View>
             <Txt variant="caption" color={colors.inkSecondary} style={styles.forecastMeta}>
@@ -166,7 +167,7 @@ export default function InsightsScreen({ navigation }: Props) {
         )}
 
         {/* ── Stat tiles ───────────────────────────────────── */}
-        <View style={styles.tiles}>
+        <FadeIn index={2} style={styles.tiles}>
           <Card style={styles.tile}>
             <Txt variant="caption" color={colors.inkMuted}>
               Transactions
@@ -191,7 +192,7 @@ export default function InsightsScreen({ navigation }: Props) {
               {topMerchant}
             </Txt>
           </Card>
-        </View>
+        </FadeIn>
 
         {/* ── Category breakdown ───────────────────────────── */}
         {segments.length > 0 && (
@@ -401,7 +402,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginTop: spacing.lg,
   },
-  forecastFill: { height: '100%', borderRadius: 3, backgroundColor: colors.info },
   forecastMeta: { marginTop: spacing.sm },
   anomalyRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.md },
   cta: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.xxl, padding: spacing.lg },

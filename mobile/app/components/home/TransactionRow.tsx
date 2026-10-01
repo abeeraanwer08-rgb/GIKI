@@ -1,19 +1,22 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { FinancialRecordSummary } from '../../types/insights';
 import { documentTypeLabel, getCategoryStyle } from '../../utils/categoryStyle';
 import { capitalize, formatMoney } from '../../utils/format';
 import IconBadge from '../../ui/IconBadge';
 import Txt from '../../ui/Txt';
+import { haptics } from '../../ui/haptics';
 import { colors, radius, spacing } from '../../ui/theme';
 
 type Props = {
   record: FinancialRecordSummary;
   isFirst: boolean;
   isLast: boolean;
+  onPress: (record: FinancialRecordSummary) => void;
 };
 
-export default function TransactionRow({ record, isFirst, isLast }: Props) {
+export default function TransactionRow({ record, isFirst, isLast, onPress }: Props) {
   const style = getCategoryStyle(record.category, record.document_type);
   const subtitle = [
     record.category ? capitalize(record.category) : null,
@@ -23,7 +26,20 @@ export default function TransactionRow({ record, isFirst, isLast }: Props) {
     .join(' · ');
 
   return (
-    <View style={[styles.row, isFirst && styles.first, isLast && styles.last]}>
+    <Pressable
+      onPress={() => {
+        haptics.tap();
+        onPress(record);
+      }}
+      accessibilityRole="button"
+      accessibilityLabel={`${record.merchant ?? 'Transaction'}, ${formatMoney(record.amount, record.currency)}`}
+      style={({ pressed }) => [
+        styles.row,
+        isFirst && styles.first,
+        isLast && styles.last,
+        pressed && styles.pressed,
+      ]}
+    >
       <IconBadge icon={style.icon} color={style.color} tint={style.tint} size={42} />
       <View style={styles.details}>
         <Txt variant="bodyStrong" numberOfLines={1}>
@@ -34,8 +50,9 @@ export default function TransactionRow({ record, isFirst, isLast }: Props) {
         </Txt>
       </View>
       <Txt variant="bodyStrong">{formatMoney(record.amount, record.currency)}</Txt>
+      <Ionicons name="chevron-forward" size={16} color={colors.border} style={styles.chevron} />
       {!isLast && <View style={styles.divider} />}
-    </View>
+    </Pressable>
   );
 }
 
@@ -55,6 +72,8 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: radius.xl,
     borderBottomRightRadius: radius.xl,
   },
+  pressed: { backgroundColor: colors.surfaceMuted },
+  chevron: { marginLeft: spacing.sm },
   details: {
     flex: 1,
     marginHorizontal: spacing.md,

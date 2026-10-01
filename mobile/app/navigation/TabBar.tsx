@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import Txt from '../ui/Txt';
+import { haptics } from '../ui/haptics';
 import { colors, gradients, radius, shadow } from '../ui/theme';
 
 type TabMeta = {
@@ -31,7 +32,10 @@ export default function TabBar({ state, navigation }: BottomTabBarProps) {
 
     const onPress = () => {
       const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
-      if (!focused && !event.defaultPrevented) navigation.navigate(route.name);
+      if (!focused && !event.defaultPrevented) {
+        haptics.tap();
+        navigation.navigate(route.name);
+      }
     };
 
     return (
@@ -61,7 +65,10 @@ export default function TabBar({ state, navigation }: BottomTabBarProps) {
         {renderTab(3)}
       </View>
       <Pressable
-        onPress={() => navigation.navigate('AddExpense')}
+        onPress={() => {
+          haptics.press();
+          navigation.navigate('AddExpense');
+        }}
         style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
         accessibilityRole="button"
         accessibilityLabel="Add expense"

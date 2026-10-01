@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, StyleSheet, View, ViewStyle } from 'react
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import Txt from './Txt';
+import { haptics } from './haptics';
 import { colors, gradients, radius, shadow } from './theme';
 
 type Variant = 'primary' | 'secondary' | 'outlineLight' | 'ghost';
@@ -56,7 +57,10 @@ export default function Button({
 
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => {
+        haptics.press();
+        onPress();
+      }}
       disabled={inactive}
       accessibilityRole="button"
       accessibilityLabel={title}

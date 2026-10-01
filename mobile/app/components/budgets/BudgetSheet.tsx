@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Modal,
@@ -23,6 +23,8 @@ type Props = {
   editing: { category: string; monthlyLimit: number } | null;
   /** Categories that already have a budget (hidden when creating). */
   taken: string[];
+  /** Category to pre-select when creating. */
+  initialCategory?: string | null;
   saving: boolean;
   error: string | null;
   onClose: () => void;
@@ -34,6 +36,7 @@ export default function BudgetSheet({
   visible,
   editing,
   taken,
+  initialCategory,
   saving,
   error,
   onClose,
@@ -44,13 +47,31 @@ export default function BudgetSheet({
   const available = CATEGORIES.filter((c) => c !== 'other' && !taken.includes(c));
   const [category, setCategory] = useState<string | null>(null);
   const [amount, setAmount] = useState('');
+  const chipsRef = useRef<ScrollView>(null);
+  const chipX = useRef<Record<string, number>>({});
+
+  // Keep the selected chip visible: a preset category can sit past the right edge.
+  // Wait a beat so the modal has mounted and its chips have reported their layout.
+  useEffect(() => {
+    if (!visible || !category) return;
+    const timer = setTimeout(() => {
+      const x = chipX.current[category];
+      if (x !== undefined) chipsRef.current?.scrollTo({ x: Math.max(x - spacing.lg, 0), animated: true });
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [visible, category]);
 
   useEffect(() => {
     if (!visible) return;
-    setCategory(editing?.category ?? available[0] ?? null);
+    setCategory(
+      editing?.category ??
+        (initialCategory && available.includes(initialCategory as (typeof CATEGORIES)[number])
+          ? initialCategory
+          : available[0] ?? null),
+    );
     setAmount(editing ? String(Math.round(editing.monthlyLimit)) : '');
     // Reset only when the sheet opens, not on every render of `available`.
-  }, [visible, editing]);
+  }, [visible, editing, initialCategory]);
 
   const parsed = Number(amount.replace(/[^0-9.]/g, ''));
   const valid = !!category && Number.isFinite(parsed) && parsed > 0;
@@ -78,13 +99,21 @@ export default function BudgetSheet({
               <Txt variant="caption" color={colors.inkSecondary} style={styles.label}>
                 Category
               </Txt>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+              <ScrollView
+                ref={chipsRef}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.chips}
+              >
                 {available.map((c) => {
                   const style = getCategoryStyle(c);
                   const selected = c === category;
                   return (
                     <Pressable
                       key={c}
+                      onLayout={(e) => {
+                        chipX.current[c] = e.nativeEvent.layout.x;
+                      }}
                       onPress={() => setCategory(c)}
                       style={[styles.chip, selected && { backgroundColor: style.color, borderColor: style.color }]}
                     >

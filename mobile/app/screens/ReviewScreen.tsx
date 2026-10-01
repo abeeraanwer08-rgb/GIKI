@@ -23,6 +23,7 @@ import Field from '../components/review/Field';
 import ItemRow from '../components/review/ItemRow';
 import HintCard from '../components/review/HintCard';
 import SummaryRow from '../components/review/SummaryRow';
+import SuccessSheet from '../components/review/SuccessSheet';
 import { generateUUID } from '../utils/uuid';
 import { CATEGORIES, documentTypeLabel, getCategoryStyle } from '../utils/categoryStyle';
 import { capitalize } from '../utils/format';
@@ -140,6 +141,8 @@ export default function ReviewScreen({ route, navigation }: Props) {
   const [editedDate, setEditedDate] = useState('');
   const [editedTotal, setEditedTotal] = useState('');
   const [editedItems, setEditedItems] = useState<UFRItem[]>([]);
+  // Set once the backend confirms the save; drives the success sheet.
+  const [savedCategory, setSavedCategory] = useState<string | null>(null);
   // null = let HissabAI auto-categorise on save.
   const [category, setCategory] = useState<string | null>(null);
 
@@ -192,11 +195,7 @@ export default function ReviewScreen({ route, navigation }: Props) {
 
       // HTTP 201 — success.
       setSaved(true);
-      Alert.alert(
-        'Saved',
-        `Your expense was saved under ${capitalize(result.category ?? 'other')}.`,
-        [{ text: 'OK', onPress: () => navigation.popToTop() }],
-      );
+      setSavedCategory(result.category ?? 'other');
     } catch (error) {
       if (error instanceof SaveError) {
         if (error.status === 409) {
@@ -453,6 +452,18 @@ export default function ReviewScreen({ route, navigation }: Props) {
           disabled={saveButtonDisabled}
         />
       </View>
+
+      <SuccessSheet
+        visible={savedCategory !== null}
+        merchant={editedMerchant}
+        total={editedTotal}
+        category={savedCategory ?? 'other'}
+        onDone={() => navigation.popToTop()}
+        onScanAnother={() => {
+          navigation.popToTop();
+          navigation.navigate('Camera');
+        }}
+      />
     </KeyboardAvoidingView>
   );
 }

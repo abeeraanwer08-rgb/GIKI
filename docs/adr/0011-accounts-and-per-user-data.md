@@ -27,4 +27,4 @@ spending. A finance app needs private accounts.
 ## Consequences
 
 - Rows saved before the migration have no owner and are invisible.
-- No password reset or email verification yet; no login rate limiting.
+- Password reset, email verification and rate limiting were added in ADR-0013.

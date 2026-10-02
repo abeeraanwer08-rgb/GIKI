@@ -10,6 +10,7 @@ import Dashboard from './pages/Dashboard';
 import Insights from './pages/Insights';
 import Landing from './pages/Landing';
 import Transactions from './pages/Transactions';
+import Verify from './pages/Verify';
 
 export default function App() {
   return (
@@ -21,6 +22,8 @@ export default function App() {
             <Route path="/" element={<Landing />} />
             <Route path="/signin" element={<Auth initialMode="signIn" />} />
             <Route path="/signup" element={<Auth initialMode="signUp" />} />
+            <Route path="/forgot" element={<Auth initialMode="forgot" />} />
+            <Route path="/verify" element={<Verify />} />
             <Route path="/app" element={<AppShell />}>
               <Route index element={<Dashboard />} />
               <Route path="add" element={<Add />} />

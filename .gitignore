@@ -16,6 +16,8 @@ eggs/
 .eggs/
 lib/
 lib64/
+# ...but the website's source folder is named lib (helpers), so it must be tracked.
+!web/src/lib/
 parts/
 sdist/
 var/

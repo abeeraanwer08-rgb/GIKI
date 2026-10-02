@@ -25,6 +25,11 @@ export class ApiError extends Error {
   constructor(public readonly status: number, public readonly detail: unknown, message: string) {
     super(message);
   }
+  /** Seconds until a rate-limited action may be retried (HTTP 429). */
+  get retryAfter(): number | undefined {
+    const detail = this.detail as { retry_after?: number } | null;
+    return detail && typeof detail === 'object' ? detail.retry_after : undefined;
+  }
   /** `detail.error` / `detail.status` style codes the backend uses. */
   get code(): string | undefined {
     const detail = this.detail as { error?: string; status?: string } | string | null;
@@ -34,20 +39,28 @@ export class ApiError extends Error {
 }
 
 let onUnauthorized: (() => void) | null = null;
+let onUnverified: (() => void) | null = null;
 export function setUnauthorizedHandler(handler: (() => void) | null): void {
   onUnauthorized = handler;
+}
+export function setUnverifiedHandler(handler: (() => void) | null): void {
+  onUnverified = handler;
 }
 
 function messageFor(status: number, detail: unknown): string {
   if (status === 401) return 'Your session has expired. Please sign in again.';
-  if (status === 413) return 'That file is too large. Use one under 10 MB.';
-  if (status === 415) return 'That file type isn’t supported. Use a JPEG, PNG or WebP image.';
+  if (status === 413) return 'That file is too large. Use files under 10 MB each (25 MB in total).';
+  if (status === 415) return 'That file type isn’t supported. Use a JPEG, PNG or WebP image, or a PDF.';
   if (status === 503) return 'The service is temporarily unavailable. Please try again shortly.';
-  const d = detail as { error?: string; message?: string; errors?: string[] } | string | null;
+  const d = detail as { error?: string; message?: string; errors?: string[] } | { msg?: string }[] | string | null;
   if (typeof d === 'string') return d;
-  if (d?.errors?.length) return d.errors.join(' ');
-  if (d?.message) return d.message;
-  if (d?.error) return d.error;
+  // FastAPI validation errors arrive as a list: "Value error, Enter a valid email address."
+  if (Array.isArray(d) && d[0]?.msg) return d[0].msg.replace(/^Value error,\s*/, '');
+  if (d && !Array.isArray(d)) {
+    if (d.errors?.length) return d.errors.join(' ');
+    if (d.message) return d.message;
+    if (d.error) return d.error;
+  }
   return `Request failed (HTTP ${status}).`;
 }
 
@@ -70,6 +83,8 @@ async function request<T>(path: string, init: RequestInit = {}, { auth = true } 
     const detail = (body as { detail?: unknown } | null)?.detail ?? null;
     // A wrong password is a 401 too; only an expired session on a signed-in call should sign out.
     if (response.status === 401 && auth && token) onUnauthorized?.();
+    // Unverified accounts are sent to the verification page instead of seeing a raw error.
+    if (response.status === 403 && (detail as { error?: string } | null)?.error === 'email_not_verified') onUnverified?.();
     throw new ApiError(response.status, detail, messageFor(response.status, detail));
   }
   return body as T;
@@ -96,6 +111,12 @@ export const api = {
   signUp: (name: string, email: string, password: string) =>
     request<AuthResponse>('/api/v1/auth/signup', json({ name, email, password }), { auth: false }),
   me: () => request<User>('/api/v1/auth/me'),
+  verifyEmail: (code: string) => request<User>('/api/v1/auth/verify-email', json({ code })),
+  resendVerification: () => request<{ message: string }>('/api/v1/auth/resend-verification', json({})),
+  forgotPassword: (email: string) =>
+    request<{ message: string }>('/api/v1/auth/forgot-password', json({ email }), { auth: false }),
+  resetPassword: (email: string, code: string, newPassword: string) =>
+    request<{ message: string }>('/api/v1/auth/reset-password', json({ email, code, new_password: newPassword }), { auth: false }),
 
   records: (opts: { limit?: number; offset?: number; category?: string | null } & DateRange = {}) =>
     request<RecordsPage>(
@@ -118,9 +139,10 @@ export const api = {
   deleteBudget: (category: string) =>
     request<BudgetOverview>(`/api/v1/budgets/${encodeURIComponent(category)}`, { method: 'DELETE' }),
 
-  upload: (file: File, documentType: ScanType) => {
+  /** One file, or the pages of one document in order (images and/or a PDF). */
+  upload: (files: File[], documentType: ScanType) => {
     const form = new FormData();
-    form.append('file', file);
+    for (const file of files) form.append('file', file);
     if (documentType !== 'auto') form.append('document_type', documentType);
     return request<ReviewResponse>('/api/v1/receipt/upload', { method: 'POST', body: form });
   },

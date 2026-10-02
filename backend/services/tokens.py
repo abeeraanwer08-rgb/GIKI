@@ -25,9 +25,11 @@ class TokenUser:
     id: str
     email: str
     name: str
+    # Bumped on password reset so every token issued before it stops working.
+    token_version: int = 0
 
 
-def _secret() -> str:
+def signing_secret() -> str:
     secret = os.environ.get("AUTH_JWT_SECRET", "")
     if len(secret) < _MIN_SECRET_LENGTH:
         raise AuthConfigurationError(
@@ -42,16 +44,22 @@ def issue_token(user: TokenUser, *, now: float | None = None) -> str:
         "sub": user.id,
         "email": user.email,
         "name": user.name,
+        "tv": user.token_version,
         "iat": issued,
         "exp": issued + TOKEN_TTL_SECONDS,
     }
-    return jwt.encode(claims, _secret(), algorithm="HS256")
+    return jwt.encode(claims, signing_secret(), algorithm="HS256")
 
 
 def verify_token(token: str) -> TokenUser:
     try:
         # Pin the algorithm: never let the token choose how it is verified.
-        claims = jwt.decode(token, _secret(), algorithms=["HS256"], options={"require": ["exp", "sub"]})
+        claims = jwt.decode(token, signing_secret(), algorithms=["HS256"], options={"require": ["exp", "sub"]})
     except jwt.PyJWTError as exc:
         raise InvalidTokenError(str(exc)) from exc
-    return TokenUser(id=claims["sub"], email=claims.get("email", ""), name=claims.get("name", ""))
+    return TokenUser(
+        id=claims["sub"],
+        email=claims.get("email", ""),
+        name=claims.get("name", ""),
+        token_version=int(claims.get("tv", 0)),
+    )

@@ -15,6 +15,8 @@ from schemas.ufr import (
     UniversalFinancialRecordMetadata,
 )
 from schemas.bank_statement import BankStatementAnalysisResponse
+from schemas.invoice import InvoiceAnalysisResponse
+from parsers.invoice_parser import INVOICE_PARSER_VERSION
 from schemas.wallet import WalletAnalysisResponse
 from parsers.bank_statement_parser import BANK_STATEMENT_PARSER_VERSION
 from parsers.wallet_parser import WALLET_PARSER_VERSION
@@ -224,6 +226,7 @@ class UniversalFinancialRecordMapper:
                     ).category,
                     metadata={
                         "date": txn.date,
+                        "date_inferred": txn.date_inferred or None,
                         "balance": txn.balance,
                         "reference": txn.reference,
                     },
@@ -258,6 +261,66 @@ class UniversalFinancialRecordMapper:
                     "debit_count": len(items),
                     "credit_count": len(credits),
                     "total_credits": round(sum(t.credit or 0.0 for t in credits), 2),
+                },
+            ),
+        )
+
+    def from_invoice_analysis(
+        self,
+        analysis: InvoiceAnalysisResponse,
+        *,
+        confidence: str | float | None = None,
+        quality_score: int | None = None,
+    ) -> UniversalFinancialRecord:
+        """Map an invoice into the generic UFR: lines become items, charges go in metadata."""
+        if isinstance(confidence, str):
+            confidence_value = CONFIDENCE_SCORES.get(confidence.lower())
+        else:
+            confidence_value = confidence
+
+        categorizer = CategorizationService()
+        items = [
+            UniversalFinancialRecordItem(
+                description=line.description or "Invoice line",
+                amount=line.amount,
+                quantity=line.quantity,
+                unit_price=line.unit_price,
+                category=categorizer.categorize(
+                    document_type=None, merchant=analysis.vendor_name, item_descriptions=[line.description]
+                ).category,
+            )
+            for line in analysis.lines
+        ]
+        # The declared subtotal wins; otherwise it is the sum of the lines when all are readable.
+        subtotal = analysis.subtotal_amount
+        if subtotal is None and items and all(i.amount is not None for i in items):
+            subtotal = round(sum(i.amount or 0.0 for i in items), 2)
+
+        return UniversalFinancialRecord(
+            record_id=str(uuid4()),
+            document_type="invoice",
+            merchant=analysis.vendor_name,
+            document_date=analysis.invoice_date,
+            currency=analysis.currency,
+            total_amount=analysis.total_amount,
+            payment_method=None,
+            category=None,
+            items=items,
+            metadata=UniversalFinancialRecordMetadata(
+                source="invoice_analysis",
+                confidence=confidence_value,
+                quality_score=quality_score,
+                subtotal_amount=subtotal,
+                tax_amount=analysis.tax_amount,
+                delivery_charge=analysis.shipping_amount,
+                discount_amount=analysis.discount_amount,
+                grand_total_amount=analysis.total_amount,
+                parser_version=INVOICE_PARSER_VERSION,
+                details={
+                    "invoice_number": analysis.invoice_number,
+                    "due_date": analysis.due_date,
+                    "payment_terms": analysis.payment_terms,
+                    "vendor_tax_id": analysis.vendor_tax_id,
                 },
             ),
         )

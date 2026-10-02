@@ -31,7 +31,7 @@ BRIGHTNESS_BRIGHT_WARN = 200      # above this (but below TOO_BRIGHT) → WARNIN
 # averages well above a receipt's brightness. Only a blown-out page should fail.
 PAGE_BRIGHTNESS_TOO_BRIGHT = 252
 PAGE_BRIGHTNESS_BRIGHT_WARN = 248
-PAGE_DOCUMENT_TYPES = {"bank_statement"}
+PAGE_DOCUMENT_TYPES = {"bank_statement", "invoice"}
 MIN_DIMENSION_PX = 1000           # minimum width AND height in pixels
 LONG_RECEIPT_RATIO = 3.5          # height / width ratio above this → long receipt
 

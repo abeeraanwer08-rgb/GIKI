@@ -36,6 +36,14 @@ class ReviewHintService:
             self._add_missing_utility_fields(hints, record)
         elif record.document_type == "wallet_screenshot":
             self._add_missing_wallet_fields(hints, record)
+        elif record.document_type == "invoice":
+            if not self._present(record.metadata.details.get("invoice_number")):
+                hints.append(
+                    ReviewHint(
+                        field="invoice_number",
+                        message="Invoice number could not be identified.",
+                    )
+                )
 
         return hints
 

@@ -55,6 +55,14 @@ class ConfidenceService:
             "billing_period",
             "due_date",
         ),
+        "invoice": (
+            "merchant",
+            "document_date",
+            "currency",
+            "total_amount",
+            "items",
+            "invoice_number",
+        ),
         "bank_statement": (
             "merchant",
             "document_date",
@@ -146,6 +154,9 @@ class ConfidenceService:
             "transaction_reference",
         }:
             value = ConfidenceService._first_item_metadata(record, field_name)
+
+        if field_name == "invoice_number":
+            value = record.metadata.details.get("invoice_number")
 
         if value is None:
             return False

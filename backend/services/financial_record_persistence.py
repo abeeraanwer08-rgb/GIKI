@@ -10,6 +10,7 @@ from typing import Any
 
 from schemas.ufr import UniversalFinancialRecord
 from services.categorization import CategorizationService
+from services.statement_dates import to_iso
 from services.supabase_client import (
     SupabaseClient,
     SupabaseConflictError,
@@ -18,6 +19,12 @@ from services.supabase_client import (
 
 # Fixed namespace so a statement row's id depends only on its content.
 _STATEMENT_ROW_NAMESPACE = uuid.UUID("6f1d3b8e-5a0c-4c53-9a47-2a1f6f0d9a11")
+
+
+def parse_valid_iso(value: object) -> bool:
+    """True for a real YYYY-MM-DD date (and nothing looser, so rows stay sortable)."""
+    text = str(value).strip()
+    return len(text) == 10 and to_iso(text) == text
 
 
 class FinancialRecordValidationError(ValueError):
@@ -216,6 +223,14 @@ class FinancialRecordPersistenceService:
                     (f"items[{index}].unit_price", item.unit_price),
                 ]
             )
+
+        if record.document_type == "bank_statement":
+            for index, item in enumerate(record.items, start=1):
+                row_date = item.metadata.get("date")
+                if row_date not in (None, "") and not parse_valid_iso(row_date):
+                    errors.append(
+                        f"Transaction {index} has an invalid date '{row_date}'. Use YYYY-MM-DD."
+                    )
 
         for field_name, value in numeric_values:
             if value is not None and not math.isfinite(value):

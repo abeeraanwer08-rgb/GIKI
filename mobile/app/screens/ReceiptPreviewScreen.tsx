@@ -11,15 +11,23 @@ import { colors, radius, spacing } from '../ui/theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ReceiptPreview'>;
 
-const CHECKS: { icon: keyof typeof Ionicons.glyphMap; label: string }[] = [
+type Check = { icon: keyof typeof Ionicons.glyphMap; label: string };
+
+const RECEIPT_CHECKS: Check[] = [
   { icon: 'storefront-outline', label: 'Store name is visible' },
   { icon: 'list-outline', label: 'Items and prices are sharp' },
   { icon: 'cash-outline', label: 'Grand total is in frame' },
 ];
 
+const STATEMENT_CHECKS: Check[] = [
+  { icon: 'business-outline', label: 'Bank name and period are visible' },
+  { icon: 'list-outline', label: 'Every row is sharp and readable' },
+  { icon: 'cash-outline', label: 'Debit, credit and balance columns are in frame' },
+];
+
 export default function ReceiptPreviewScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
-  const { capturedImages } = route.params;
+  const { capturedImages, documentType } = route.params;
 
   // Display the most recently captured image (last in array).
   // The array structure is intentional — a future milestone will allow
@@ -47,7 +55,7 @@ export default function ReceiptPreviewScreen({ navigation, route }: Props) {
           Clear photos give the AI the best chance of reading every line.
         </Txt>
         <View style={styles.checks}>
-          {CHECKS.map((c) => (
+          {(documentType === 'bank_statement' ? STATEMENT_CHECKS : RECEIPT_CHECKS).map((c) => (
             <View key={c.label} style={styles.check}>
               <Ionicons name={c.icon} size={16} color={colors.primary} />
               <Txt variant="caption" color={colors.inkSecondary} style={styles.checkText}>
@@ -67,7 +75,7 @@ export default function ReceiptPreviewScreen({ navigation, route }: Props) {
           <Button
             title="Use photo"
             iconRight="arrow-forward"
-            onPress={() => navigation.navigate('Processing', { capturedImages })}
+            onPress={() => navigation.navigate('Processing', { capturedImages, documentType })}
             style={styles.continue}
           />
         </View>

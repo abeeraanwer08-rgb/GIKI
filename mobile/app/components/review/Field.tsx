@@ -11,9 +11,11 @@ type Props = {
   icon: keyof typeof Ionicons.glyphMap;
   placeholder?: string;
   emphasize?: boolean;
+  /** false = shown as a computed, read-only value. */
+  editable?: boolean;
 };
 
-export default function Field({ label, value, onChangeText, icon, placeholder, emphasize }: Props) {
+export default function Field({ label, value, onChangeText, icon, placeholder, emphasize, editable = true }: Props) {
   const [focused, setFocused] = useState(false);
 
   return (
@@ -32,8 +34,9 @@ export default function Field({ label, value, onChangeText, icon, placeholder, e
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           underlineColorAndroid="transparent"
+          editable={editable}
         />
-        <Ionicons name="create-outline" size={16} color={colors.inkMuted} />
+        <Ionicons name={editable ? 'create-outline' : 'lock-closed-outline'} size={16} color={colors.inkMuted} />
       </View>
     </View>
   );

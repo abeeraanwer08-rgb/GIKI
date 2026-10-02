@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { CompositeScreenProps, useFocusEffect } from '@react-navigation/native';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -7,15 +7,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList, TabParamList } from '../navigation/AppNavigator';
-import { BudgetOverview, FinancialRecordSummary, MonthForecast } from '../types/insights';
-import { fetchBudgets, fetchFinancialRecords, fetchSummary } from '../services/insightsService';
+import { BudgetOverview, FinancialRecordSummary, FinancialSummary } from '../types/insights';
+import { fetchBudgets, fetchFinancialRecordsPage, fetchSummary } from '../services/insightsService';
 import TransactionRow from '../components/home/TransactionRow';
 import TransactionSheet from '../components/home/TransactionSheet';
 import ProfileSheet, { Avatar } from '../components/home/ProfileSheet';
 import { useAuth } from '../auth/AuthContext';
 import { haptics } from '../ui/haptics';
 import { getCategoryStyle } from '../utils/categoryStyle';
-import { capitalize, dayLabel, formatMoney, greeting, isSameMonth } from '../utils/format';
+import { capitalize, dayLabel, formatMoney, greeting } from '../utils/format';
 import Txt from '../ui/Txt';
 import Card from '../ui/Card';
 import IconBadge from '../ui/IconBadge';
@@ -59,7 +59,10 @@ export default function HomeScreen({ navigation }: Props) {
   const [records, setRecords] = useState<FinancialRecordSummary[]>([]);
   const [state, setState] = useState<LoadState>('loading');
   const [refreshing, setRefreshing] = useState(false);
-  const [forecast, setForecast] = useState<MonthForecast | null>(null);
+  const [summary, setSummary] = useState<FinancialSummary | null>(null);
+  const [total, setTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [budgets, setBudgets] = useState<BudgetOverview | null>(null);
   const [selected, setSelected] = useState<FinancialRecordSummary | null>(null);
   const [filter, setFilter] = useState<string | null>(null);
@@ -67,20 +70,37 @@ export default function HomeScreen({ navigation }: Props) {
   const load = useCallback(async () => {
     // Forecast and budgets are extras: Home still works if either is unavailable.
     const [recordsResult, summaryResult, budgetsResult] = await Promise.allSettled([
-      fetchFinancialRecords(),
+      fetchFinancialRecordsPage({ category: filter }),
       fetchSummary(),
       fetchBudgets(),
     ]);
     if (recordsResult.status === 'fulfilled') {
-      setRecords(recordsResult.value);
+      setRecords(recordsResult.value.records);
+      setTotal(recordsResult.value.total);
+      setHasMore(recordsResult.value.has_more);
       setState('loaded');
     } else {
       setState('error');
     }
-    setForecast(summaryResult.status === 'fulfilled' ? summaryResult.value.current_month : null);
+    setSummary(summaryResult.status === 'fulfilled' ? summaryResult.value : null);
     setBudgets(budgetsResult.status === 'fulfilled' ? budgetsResult.value : null);
     setRefreshing(false);
-  }, []);
+  }, [filter]);
+
+  const loadMore = async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const page = await fetchFinancialRecordsPage({ offset: records.length, category: filter });
+      setRecords((prev) => [...prev, ...page.records]);
+      setTotal(page.total);
+      setHasMore(page.has_more);
+    } catch {
+      // Leave the list as it is; the button stays so the user can retry.
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   // Refetch whenever Home regains focus (e.g. after saving an expense).
   useFocusEffect(
@@ -89,38 +109,32 @@ export default function HomeScreen({ navigation }: Props) {
     }, [load]),
   );
 
-  const currency = records.find((r) => r.currency)?.currency ?? 'PKR';
-  const allTimeTotal = records.reduce((sum, r) => sum + (r.amount ?? 0), 0);
-  const monthTotal = records
-    .filter((r) => isSameMonth(r.transaction_date))
-    .reduce((sum, r) => sum + (r.amount ?? 0), 0);
+  // Headline numbers come from the server-side summary so they stay correct
+  // however many pages of the list are loaded.
+  const forecast = summary?.current_month ?? null;
+  const currency = summary?.currency ?? records.find((r) => r.currency)?.currency ?? 'PKR';
+  const allTimeTotal = summary?.total_amount ?? records.reduce((sum, r) => sum + (r.amount ?? 0), 0);
+  const recordCount = summary?.record_count ?? total;
+  const monthTotal = forecast?.spent_to_date ?? 0;
 
   const categoryShares = useMemo<CategoryShare[]>(() => {
-    const totals = new Map<string, number>();
-    for (const r of records) {
-      const key = r.category || 'other';
-      totals.set(key, (totals.get(key) ?? 0) + (r.amount ?? 0));
-    }
-    const sum = [...totals.values()].reduce((a, b) => a + b, 0);
-    return [...totals.entries()]
-      .map(([category, amount]) => ({
-        category,
-        amount,
-        share: sum > 0 ? amount / sum : 0,
-        color: getCategoryStyle(category).onDark,
+    const totals = summary?.by_category ?? [];
+    const sum = totals.reduce((a, c) => a + c.total_amount, 0);
+    return totals
+      .map((c) => ({
+        category: c.category || 'other',
+        amount: c.total_amount,
+        share: sum > 0 ? c.total_amount / sum : 0,
+        color: getCategoryStyle(c.category || 'other').onDark,
       }))
       .sort((a, b) => b.amount - a.amount);
-  }, [records]);
+  }, [summary]);
 
-  const filterOptions = useMemo(
-    () => [...new Set(records.map((r) => r.category).filter((c): c is string => !!c))],
-    [records],
-  );
-  const visibleRecords = useMemo(
-    () => (filter ? records.filter((r) => r.category === filter) : records),
-    [records, filter],
-  );
-  const groups = useMemo(() => groupByDay(visibleRecords), [visibleRecords]);
+  const filterOptions = useMemo(() => {
+    const options = (summary?.by_category ?? []).map((c) => c.category).filter(Boolean);
+    return filter && !options.includes(filter) ? [...options, filter] : options;
+  }, [summary, filter]);
+  const groups = useMemo(() => groupByDay(records), [records]);
   const animatedMonthTotal = useCountUp(loadedTotal(state, monthTotal));
   const loading = state === 'loading';
 
@@ -230,7 +244,7 @@ export default function HomeScreen({ navigation }: Props) {
                   Records
                 </Txt>
                 <Txt variant="bodyStrong" color={colors.inkInverse}>
-                  {loading ? '—' : records.length}
+                  {loading ? '—' : recordCount}
                 </Txt>
               </View>
             </View>
@@ -299,8 +313,8 @@ export default function HomeScreen({ navigation }: Props) {
           <SectionHeader
             title="Recent activity"
             subtitle={
-              state === 'loaded' && records.length > 0
-                ? `${records.length} transaction${records.length === 1 ? '' : 's'}`
+              state === 'loaded' && total > 0
+                ? `${total} transaction${total === 1 ? '' : 's'}`
                 : undefined
             }
           />
@@ -397,6 +411,27 @@ export default function HomeScreen({ navigation }: Props) {
               </FadeIn>
             ))
           )}
+
+          {state === 'loaded' && hasMore && (
+            <Pressable
+              onPress={() => {
+                haptics.tap();
+                loadMore();
+              }}
+              disabled={loadingMore}
+              accessibilityRole="button"
+              accessibilityLabel="Load more transactions"
+              style={({ pressed }) => [styles.loadMore, pressed && styles.pressed]}
+            >
+              {loadingMore ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <Txt variant="label" color={colors.primary}>
+                  Load more · {Math.max(total - records.length, 0)} remaining
+                </Txt>
+              )}
+            </Pressable>
+          )}
         </View>
       </ScrollView>
 
@@ -424,6 +459,14 @@ export default function HomeScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
+  loadMore: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 48,
+    marginTop: spacing.sm,
+    borderRadius: radius.lg,
+    backgroundColor: colors.primarySoft,
+  },
   screen: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
   scrollContent: { paddingBottom: spacing.xxl },

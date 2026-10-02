@@ -25,6 +25,7 @@ import Button from '../ui/Button';
 import IconBadge from '../ui/IconBadge';
 import EmptyState from '../ui/EmptyState';
 import FocusStatusBar from '../ui/FocusStatusBar';
+import { ScanDocumentType, scanTypeLabel } from '../utils/scanType';
 import { colors, radius, spacing } from '../ui/theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Camera'>;
@@ -41,8 +42,10 @@ interface PendingCapture {
   height: number;
 }
 
-export default function CameraScreen({ navigation }: Props) {
+export default function CameraScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
+  const documentType: ScanDocumentType | undefined = route.params?.documentType;
+  const isStatement = documentType === 'bank_statement';
   const cameraRef = useRef<CameraView>(null);
   const [capturing, setCapturing] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
@@ -105,13 +108,13 @@ export default function CameraScreen({ navigation }: Props) {
     const { uri } = pendingCapture;
     setPendingCapture(null);
     setQualityIssues([]);
-    navigation.navigate('ReceiptPreview', { capturedImages: [uri] });
+    navigation.navigate('ReceiptPreview', { capturedImages: [uri], documentType });
   };
 
   // ── Choose an existing photo instead of capturing ───────────────────────
   const handleGallery = async () => {
     const uri = await pickReceiptFromGallery();
-    if (uri) navigation.navigate('ReceiptPreview', { capturedImages: [uri] });
+    if (uri) navigation.navigate('ReceiptPreview', { capturedImages: [uri], documentType });
   };
 
   // ── Capture ──────────────────────────────────────────────────────────────
@@ -146,7 +149,7 @@ export default function CameraScreen({ navigation }: Props) {
       }
 
       // No quality issues (or base64 unavailable) → proceed directly.
-      navigation.navigate('ReceiptPreview', { capturedImages: [photo.uri] });
+      navigation.navigate('ReceiptPreview', { capturedImages: [photo.uri], documentType });
     } catch (err) {
       console.error('[Camera] takePictureAsync failed:', err);
     } finally {
@@ -190,7 +193,9 @@ export default function CameraScreen({ navigation }: Props) {
           <View style={styles.hintPill}>
             <Ionicons name="receipt-outline" size={14} color={colors.inkInverse} />
             <Txt variant="caption" color={colors.inkInverse} style={styles.hintText}>
-              Fit the whole receipt inside the frame
+              {isStatement
+                ? 'Fit the whole statement page inside the frame'
+                : 'Fit the whole receipt inside the frame'}
             </Txt>
           </View>
         </View>
@@ -207,7 +212,9 @@ export default function CameraScreen({ navigation }: Props) {
           <Ionicons name="close" size={22} color={colors.inkInverse} />
         </Pressable>
         <Txt variant="bodyStrong" color={colors.inkInverse}>
-          Scan receipt
+          {documentType && documentType !== 'auto' && documentType !== 'receipt'
+            ? `Scan ${scanTypeLabel(documentType).toLowerCase()}`
+            : 'Scan receipt'}
         </Txt>
         <View style={styles.glassSpacer} />
       </View>

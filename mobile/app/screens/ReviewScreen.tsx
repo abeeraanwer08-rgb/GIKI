@@ -73,6 +73,13 @@ function parseNumericAmount(s: string): number | null {
   return isNaN(n) ? null : n;
 }
 
+/** "PKR 12,345.5" for a list of amount strings; used to keep a statement's total in step with its rows. */
+function sumAmounts(items: UFRItem[], currency: string | null): string {
+  const sum = items.reduce((acc, item) => acc + (parseNumericAmount(item.amount) ?? 0), 0);
+  const formatted = (Math.round(sum * 100) / 100).toLocaleString('en-US', { maximumFractionDigits: 2 });
+  return currency ? `${currency} ${formatted}` : formatted;
+}
+
 /** Extract a 2-4 letter ISO currency code from a formatted string such as "PKR 2,450" → "PKR". */
 function parseCurrencyCode(s: string): string | null {
   const match = s.match(/\b([A-Z]{2,4})\b/);
@@ -105,11 +112,12 @@ function buildSavePayload(
       amount: parseNumericAmount(item.amount),
       quantity: null,
       unit_price: null,
-      category: null,
-      metadata: {},
+      category: item.category ?? null,
+      metadata: item.metadata ?? {},
     })),
     metadata: {
-      source: 'receipt_analysis',
+      source: ufr.source ?? 'receipt_analysis',
+      details: ufr.details,
       confidence: null,
       confidence_level: ufr.confidence || null,
       review_required: null,
@@ -143,6 +151,7 @@ export default function ReviewScreen({ route, navigation }: Props) {
   const [editedItems, setEditedItems] = useState<UFRItem[]>([]);
   // Set once the backend confirms the save; drives the success sheet.
   const [savedCategory, setSavedCategory] = useState<string | null>(null);
+  const [savedCount, setSavedCount] = useState(1);
   // null = let HissabAI auto-categorise on save.
   const [category, setCategory] = useState<string | null>(null);
 
@@ -162,6 +171,20 @@ export default function ReviewScreen({ route, navigation }: Props) {
     setRecordId(generateUUID());
   }, [uploadedUfr]);
 
+  const isStatement = (ufr?.documentType ?? uploadedUfr.documentType) === 'bank_statement';
+
+  // A statement's total is always the sum of the rows kept, so dropping or
+  // correcting a row can never leave the total out of step with them.
+  const applyStatementItems = (items: UFRItem[]) => {
+    setEditedItems(items);
+    setEditedTotal(sumAmounts(items, parseCurrencyCode(editedTotal)));
+  };
+
+  const removeItem = (index: number) => {
+    if (editedItems.length <= 1) return;
+    applyStatementItems(editedItems.filter((_, i) => i !== index));
+  };
+
   const updateItemName = (index: number, text: string) => {
     setEditedItems((prev) =>
       prev.map((item, i) => (i === index ? { ...item, name: text } : item)),
@@ -169,9 +192,9 @@ export default function ReviewScreen({ route, navigation }: Props) {
   };
 
   const updateItemAmount = (index: number, text: string) => {
-    setEditedItems((prev) =>
-      prev.map((item, i) => (i === index ? { ...item, amount: text } : item)),
-    );
+    const next = editedItems.map((item, i) => (i === index ? { ...item, amount: text } : item));
+    if (isStatement) applyStatementItems(next);
+    else setEditedItems(next);
   };
 
   const doSave = async (confirmMismatch: boolean) => {
@@ -195,6 +218,7 @@ export default function ReviewScreen({ route, navigation }: Props) {
 
       // HTTP 201 — success.
       setSaved(true);
+      setSavedCount(result.records_saved ?? 1);
       setSavedCategory(result.category ?? 'other');
     } catch (error) {
       if (error instanceof SaveError) {
@@ -340,14 +364,14 @@ export default function ReviewScreen({ route, navigation }: Props) {
         <SectionHeader title="Details" subtitle="Tap any field to correct it" />
         <Card>
           <Field
-            label="Merchant"
-            icon="storefront-outline"
+            label={isStatement ? 'Bank' : 'Merchant'}
+            icon={isStatement ? 'business-outline' : 'storefront-outline'}
             value={editedMerchant}
             onChangeText={setEditedMerchant}
-            placeholder="Store name"
+            placeholder={isStatement ? 'Bank name' : 'Store name'}
           />
           <Field
-            label="Date"
+            label={isStatement ? 'Statement end date' : 'Date'}
             icon="calendar-outline"
             value={editedDate}
             onChangeText={setEditedDate}
@@ -355,10 +379,11 @@ export default function ReviewScreen({ route, navigation }: Props) {
           />
           <View style={styles.lastField}>
             <Field
-              label="Total paid"
+              label={isStatement ? 'Total spent' : 'Total paid'}
               icon="cash-outline"
               value={editedTotal}
-              onChangeText={setEditedTotal}
+              onChangeText={isStatement ? () => {} : setEditedTotal}
+              editable={!isStatement}
               placeholder="PKR 0"
               emphasize
             />
@@ -366,6 +391,19 @@ export default function ReviewScreen({ route, navigation }: Props) {
         </Card>
 
         {/* ── Category ─────────────────────────────────────── */}
+        {isStatement ? (
+          <Card style={styles.statementNote}>
+            <IconBadge icon="layers" color={colors.primary} tint={colors.primarySoft} size={40} />
+            <View style={styles.confidenceText}>
+              <Txt variant="bodyStrong">Categorised row by row</Txt>
+              <Txt variant="caption" color={colors.inkSecondary}>
+                Each spending row is filed under its own category. Remove any row that isn’t spending, such as a
+                transfer between your own accounts.
+              </Txt>
+            </View>
+          </Card>
+        ) : (
+          <>
         <SectionHeader title="Category" subtitle="Auto-detect uses the merchant and items" />
         <ScrollView
           horizontal
@@ -400,12 +438,18 @@ export default function ReviewScreen({ route, navigation }: Props) {
             );
           })}
         </ScrollView>
+          </>
+        )}
 
         {editedItems.length > 0 && (
           <>
             <SectionHeader
-              title="Items"
-              subtitle={`${editedItems.length} line item${editedItems.length === 1 ? '' : 's'} found`}
+              title={isStatement ? 'Spending transactions' : 'Items'}
+              subtitle={
+                isStatement
+                  ? `${editedItems.length} debit${editedItems.length === 1 ? '' : 's'} found · money in is not counted`
+                  : `${editedItems.length} line item${editedItems.length === 1 ? '' : 's'} found`
+              }
             />
             <Card style={styles.itemsCard}>
               {editedItems.map((item, index) => (
@@ -416,8 +460,34 @@ export default function ReviewScreen({ route, navigation }: Props) {
                   amount={item.amount}
                   onChangeName={(text) => updateItemName(index, text)}
                   onChangeAmount={(text) => updateItemAmount(index, text)}
+                  caption={isStatement ? statementCaption(item) : undefined}
+                  onRemove={isStatement && editedItems.length > 1 ? () => removeItem(index) : undefined}
                 />
               ))}
+            </Card>
+          </>
+        )}
+
+        {isStatement && ufr?.details && (
+          <>
+            <SectionHeader title="Statement summary" />
+            <Card>
+              {ufr.details.period_start || ufr.details.period_end ? (
+                <SummaryRow
+                  label="Period"
+                  value={`${ufr.details.period_start ?? '—'} → ${ufr.details.period_end ?? '—'}`}
+                />
+              ) : null}
+              {ufr.details.account_last4 ? (
+                <SummaryRow label="Account" value={`•••• ${String(ufr.details.account_last4)}`} />
+              ) : null}
+              {typeof ufr.details.total_credits === 'number' ? (
+                <SummaryRow
+                  label={`Money in (${String(ufr.details.credit_count ?? 0)})`}
+                  value={sumAmounts([{ name: '', amount: String(ufr.details.total_credits) }], parseCurrencyCode(editedTotal))}
+                />
+              ) : null}
+              <SummaryRow label="Total spent" value={editedTotal} total />
             </Card>
           </>
         )}
@@ -458,6 +528,7 @@ export default function ReviewScreen({ route, navigation }: Props) {
         merchant={editedMerchant}
         total={editedTotal}
         category={savedCategory ?? 'other'}
+        savedCount={savedCount}
         onDone={() => navigation.popToTop()}
         onScanAnother={() => {
           navigation.popToTop();
@@ -468,7 +539,19 @@ export default function ReviewScreen({ route, navigation }: Props) {
   );
 }
 
+/** Small caption under a statement row: its date and the date-less fallback. */
+function statementCaption(item: UFRItem): string | undefined {
+  const date = item.metadata?.date;
+  return typeof date === 'string' && date ? date : undefined;
+}
+
 const styles = StyleSheet.create({
+  statementNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.md,
+    padding: spacing.lg,
+  },
   container: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
   scrollContent: {

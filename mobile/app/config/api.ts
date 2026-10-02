@@ -1,15 +1,13 @@
 /**
  * HissabAI backend API configuration.
  *
- * API_BASE_URL must point to the running FastAPI backend.
- * In the Replit development environment this is the external dev-domain URL;
- * port 8000 is mapped to the default HTTPS port (80) by the Replit proxy.
+ * The app talks ONLY to the FastAPI backend (never to Supabase or OpenAI).
+ * Point it at your backend with the EXPO_PUBLIC_API_URL environment variable:
  *
- * Update this value when the Replit dev domain changes or when deploying to
- * a production environment.
+ *   EXPO_PUBLIC_API_URL=http://192.168.1.20:8000 npx expo start
  *
- * The mobile app communicates ONLY with FastAPI.
- * Never set this to a Supabase or OpenAI URL.
+ * Use your computer's LAN IP for a physical phone. The default,
+ * http://10.0.2.2:8000, is how the Android emulator reaches your computer's
+ * localhost. See the README for the full run instructions.
  */
-export const API_BASE_URL =
-  'https://ae508cc4-3097-4e5f-908b-cbc76971a435-00-15xeicim3cyj.sisko.replit.dev';
+export const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL ?? 'http://10.0.2.2:8000').replace(/\/+$/, '');

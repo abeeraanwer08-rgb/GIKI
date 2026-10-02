@@ -13,6 +13,7 @@ import ProcessingScreen from '../screens/ProcessingScreen';
 import ReviewScreen from '../screens/ReviewScreen';
 import TabBar from './TabBar';
 import { UniversalFinancialRecord } from '../types/ufr';
+import { ScanDocumentType } from '../utils/scanType';
 import { colors, fonts } from '../ui/theme';
 
 export type TabParamList = {
@@ -26,13 +27,16 @@ export type TabParamList = {
 export type RootStackParamList = {
   Main: NavigatorScreenParams<TabParamList> | undefined;
   AddExpense: undefined;
-  Camera: undefined;
+  /** `documentType` is what the user said they are scanning; omitted = auto-detect. */
+  Camera: { documentType?: ScanDocumentType } | undefined;
   ReceiptPreview: {
     /** Array of local image URIs — structured for multi-photo support in a future milestone */
     capturedImages: string[];
+    documentType?: ScanDocumentType;
   };
   Processing: {
     capturedImages: string[];
+    documentType?: ScanDocumentType;
   };
   Review: {
     imageUri: string;

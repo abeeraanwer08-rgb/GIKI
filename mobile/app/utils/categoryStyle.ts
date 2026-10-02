@@ -56,6 +56,7 @@ const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   receipt: 'Receipt',
   utility_bill: 'Utility bill',
   wallet_screenshot: 'Wallet transfer',
+  bank_statement: 'Bank statement',
 };
 
 export function documentTypeLabel(documentType: string | null | undefined): string {

@@ -1,6 +1,7 @@
 import { UniversalFinancialRecord } from '../types/ufr';
 import { API_BASE_URL } from '../config/api';
 import { authHeaders, notifyIfUnauthorized } from '../auth/session';
+import { ScanDocumentType } from '../utils/scanType';
 
 interface EditableFieldResponse {
   value?: unknown;
@@ -9,6 +10,8 @@ interface EditableFieldResponse {
 interface ReviewResponseItem {
   description: string;
   amount?: number | null;
+  category?: string | null;
+  metadata?: Record<string, unknown> | null;
 }
 
 interface ReviewHintResponse {
@@ -89,7 +92,11 @@ function toUniversalFinancialRecord(
     items: (response.extracted_items ?? []).map((item) => ({
       name: item.description,
       amount: formatAmount(item.amount, currency),
+      category: item.category ?? null,
+      metadata: item.metadata ?? {},
     })),
+    source: asText(meta.source) || undefined,
+    details: (meta.details as Record<string, unknown> | undefined) ?? undefined,
     serviceCharge:
       serviceCharge === null ? undefined : formatAmount(serviceCharge, currency),
     taxAmount:
@@ -153,6 +160,9 @@ function uploadErrorFor(status: number, body: unknown): UploadError {
   if (status === 415) {
     return new UploadError(status, 'That file type isn’t supported. Use a JPEG or PNG photo.', true);
   }
+  if (status === 422) {
+    return new UploadError(status, 'That document type isn’t supported. Choose a different type and try again.', false);
+  }
   if (status === 400 && detail?.status === 'unsupported_document') {
     return new UploadError(status, 'This doesn’t look like a receipt, bill or wallet screenshot.', true);
   }
@@ -164,6 +174,7 @@ function uploadErrorFor(status: number, body: unknown): UploadError {
 
 export async function uploadDocument(
   imageUris: string[],
+  documentType?: ScanDocumentType,
 ): Promise<UniversalFinancialRecord> {
   const imageUri = imageUris[0];
   if (!imageUri) {
@@ -179,6 +190,10 @@ export async function uploadDocument(
       type: getUploadMimeType(imageUri),
     } as unknown as Blob,
   );
+  // Only send an explicit choice; omitting it lets the server classify the image.
+  if (documentType && documentType !== 'auto') {
+    formData.append('document_type', documentType);
+  }
 
   let response: Response;
   try {
@@ -236,6 +251,8 @@ export interface UFRMetadataPayload {
   discount_amount?: number | null;
   subtotal_amount?: number | null;
   confirm_total_mismatch?: boolean;
+  /** Document-specific facts (e.g. a bank statement's period and balances), passed through unchanged. */
+  details?: Record<string, unknown>;
 }
 
 export interface SaveRecordPayload {
@@ -245,7 +262,7 @@ export interface SaveRecordPayload {
   document_date: string | null;
   currency: string | null;
   total_amount: number | null;
-  payment_method: null;
+  payment_method: string | null;
   /** null lets the backend auto-categorise from the merchant and items. */
   category: string | null;
   items: UFRItemPayload[];
@@ -257,6 +274,8 @@ export interface SaveRecordResponse {
   record_id: string;
   document_type: string;
   category?: string | null;
+  /** 1 for most documents; one per spending transaction for a bank statement. */
+  records_saved?: number;
 }
 
 export class SaveError extends Error {

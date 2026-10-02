@@ -3,10 +3,11 @@ import { authHeaders, notifyIfUnauthorized } from '../auth/session';
 import {
   AskResponse,
   BudgetOverview,
-  FinancialRecordSummary,
   FinancialSummary,
   InsightsResponse,
+  RecordsPage,
 } from '../types/insights';
+import { DateRange } from '../utils/period';
 
 export class ApiError extends Error {
   constructor(
@@ -36,22 +37,35 @@ async function getJson<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
-/** Fetch saved financial records, most recent first, for the Home transaction list. */
-export async function fetchFinancialRecords(): Promise<FinancialRecordSummary[]> {
-  const body = await getJson<{ records: FinancialRecordSummary[] }>(
-    '/api/v1/financial-records',
-  );
-  return body.records;
+function rangeQuery({ startDate, endDate }: DateRange = {}, extra: Record<string, string | number | undefined> = {}) {
+  const params: string[] = [];
+  const all: Record<string, string | number | undefined> = { start_date: startDate, end_date: endDate, ...extra };
+  for (const [key, value] of Object.entries(all)) {
+    if (value !== undefined && value !== '') params.push(`${key}=${encodeURIComponent(String(value))}`);
+  }
+  return params.length ? `?${params.join('&')}` : '';
 }
 
-/** Fetch the deterministic spending summary plus AI-generated insights. */
-export async function fetchInsights(): Promise<InsightsResponse> {
-  return getJson<InsightsResponse>('/api/v1/insights');
+export const RECORDS_PAGE_SIZE = 30;
+
+/** One page of saved records, most recent first, optionally limited to a category / date range. */
+export async function fetchFinancialRecordsPage(
+  options: { offset?: number; limit?: number; category?: string | null } & DateRange = {},
+): Promise<RecordsPage> {
+  const { offset = 0, limit = RECORDS_PAGE_SIZE, category, ...range } = options;
+  return getJson<RecordsPage>(
+    `/api/v1/financial-records${rangeQuery(range, { limit, offset, category: category ?? undefined })}`,
+  );
+}
+
+/** Fetch the deterministic spending summary plus AI-generated insights for a period. */
+export async function fetchInsights(range: DateRange = {}): Promise<InsightsResponse> {
+  return getJson<InsightsResponse>(`/api/v1/insights${rangeQuery(range)}`);
 }
 
 /** Ask a free-form question, grounded in the same deterministic summary. */
-export async function askInsights(question: string): Promise<AskResponse> {
-  return getJson<AskResponse>('/api/v1/insights/ask', {
+export async function askInsights(question: string, range: DateRange = {}): Promise<AskResponse> {
+  return getJson<AskResponse>(`/api/v1/insights/ask${rangeQuery(range)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ question }),
@@ -59,8 +73,8 @@ export async function askInsights(question: string): Promise<AskResponse> {
 }
 
 /** Deterministic summary (forecast, anomalies, breakdowns) — no LLM call, cheap to refresh. */
-export async function fetchSummary(): Promise<FinancialSummary> {
-  return getJson<FinancialSummary>('/api/v1/insights/summary');
+export async function fetchSummary(range: DateRange = {}): Promise<FinancialSummary> {
+  return getJson<FinancialSummary>(`/api/v1/insights/summary${rangeQuery(range)}`);
 }
 
 export async function fetchBudgets(): Promise<BudgetOverview> {

@@ -47,6 +47,17 @@ export interface FinancialSummary {
   top_merchants: CategoryTotal[];
   current_month: MonthForecast | null;
   anomalies: SpendingAnomaly[];
+  start_date?: string | null;
+  end_date?: string | null;
+}
+
+/** One page of saved records plus how many exist in total. */
+export interface RecordsPage {
+  records: FinancialRecordSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
 }
 
 export type BudgetState = 'on_track' | 'warning' | 'over';

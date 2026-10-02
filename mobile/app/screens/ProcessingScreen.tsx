@@ -21,12 +21,21 @@ const STEPS = [
   'Organising items and totals',
 ] as const;
 
+const STATEMENT_STEPS = [
+  'Uploading your photo',
+  'Checking image quality',
+  'Reading every transaction with AI',
+  'Checking totals and balances',
+] as const;
+
 const STEP_INTERVAL_MS = 1600;
 
 export default function ProcessingScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
-  const { capturedImages } = route.params;
+  const { capturedImages, documentType } = route.params;
   const imageUri = capturedImages[0];
+  const isStatement = documentType === 'bank_statement';
+  const steps = isStatement ? STATEMENT_STEPS : STEPS;
 
   const [activeStep, setActiveStep] = useState(0);
   const [error, setError] = useState<UploadError | null>(null);
@@ -58,16 +67,16 @@ export default function ProcessingScreen({ navigation, route }: Props) {
   useEffect(() => {
     if (error) return;
     const interval = setInterval(() => {
-      setActiveStep((prev) => Math.min(prev + 1, STEPS.length - 1));
+      setActiveStep((prev) => Math.min(prev + 1, steps.length - 1));
     }, STEP_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [error, attempt]);
+  }, [error, attempt, steps.length]);
 
   // Upload document and navigate to Review on success.
   useEffect(() => {
     let cancelled = false;
 
-    uploadDocument(capturedImages)
+    uploadDocument(capturedImages, documentType)
       .then((ufr) => {
         if (cancelled || !mountedRef.current) return;
         navigation.replace('Review', { imageUri, capturedImages, ufr });
@@ -84,7 +93,7 @@ export default function ProcessingScreen({ navigation, route }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [capturedImages, imageUri, navigation, attempt]);
+  }, [capturedImages, documentType, imageUri, navigation, attempt]);
 
   const retry = () => {
     setError(null);
@@ -134,15 +143,15 @@ export default function ProcessingScreen({ navigation, route }: Props) {
           </LinearGradient>
         </View>
         <Txt variant="title" align="center" style={styles.title}>
-          Analysing your receipt
+          {isStatement ? 'Analysing your statement' : 'Analysing your receipt'}
         </Txt>
         <Txt variant="body" color={colors.inkSecondary} align="center">
-          This usually takes a few seconds
+          {isStatement ? 'Statements can take up to a minute' : 'This usually takes a few seconds'}
         </Txt>
       </View>
 
       <Card style={styles.steps}>
-        {STEPS.map((step, i) => {
+        {steps.map((step, i) => {
           const done = i < activeStep;
           const active = i === activeStep;
           return (

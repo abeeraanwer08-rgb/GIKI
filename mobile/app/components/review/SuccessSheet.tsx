@@ -16,12 +16,14 @@ type Props = {
   merchant: string;
   total: string;
   category: string;
+  /** More than 1 means a bank statement was split into this many expenses. */
+  savedCount?: number;
   onDone: () => void;
   onScanAnother: () => void;
 };
 
 /** Confirmation after a record is saved: a springing check, where it went, and what to do next. */
-export default function SuccessSheet({ visible, merchant, total, category, onDone, onScanAnother }: Props) {
+export default function SuccessSheet({ visible, merchant, total, category, savedCount = 1, onDone, onScanAnother }: Props) {
   const insets = useSafeAreaInsets();
   const pop = useRef(new Animated.Value(0)).current;
   const content = useRef(new Animated.Value(0)).current;
@@ -65,21 +67,32 @@ export default function SuccessSheet({ visible, merchant, total, category, onDon
             ]}
           >
             <Txt variant="title" align="center">
-              Expense saved
+              {savedCount > 1 ? `${savedCount} expenses saved` : 'Expense saved'}
             </Txt>
             <Txt variant="body" color={colors.inkSecondary} align="center" style={styles.subtitle}>
               {merchant ? `${merchant} · ${total}` : total}
             </Txt>
 
             <View style={styles.categoryRow}>
-              <IconBadge icon={style.icon} color={style.color} tint={style.tint} size={34} />
-              <Txt variant="label" style={styles.categoryText}>
-                Filed under <Txt variant="bodyStrong">{capitalize(category)}</Txt>
-              </Txt>
+              {savedCount > 1 ? (
+                <>
+                  <IconBadge icon="layers" color={colors.primary} tint={colors.primarySoft} size={34} />
+                  <Txt variant="label" style={styles.categoryText}>
+                    Each transaction filed under its own category
+                  </Txt>
+                </>
+              ) : (
+                <>
+                  <IconBadge icon={style.icon} color={style.color} tint={style.tint} size={34} />
+                  <Txt variant="label" style={styles.categoryText}>
+                    Filed under <Txt variant="bodyStrong">{capitalize(category)}</Txt>
+                  </Txt>
+                </>
+              )}
             </View>
 
             <Button title="Done" icon="checkmark" onPress={onDone} />
-            <Button title="Scan another receipt" variant="ghost" icon="scan" onPress={onScanAnother} style={styles.again} />
+            <Button title="Scan another" variant="ghost" icon="scan" onPress={onScanAnother} style={styles.again} />
           </Animated.View>
         </View>
       </View>

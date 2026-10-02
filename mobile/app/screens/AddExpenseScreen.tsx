@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { pickReceiptFromGallery } from '../utils/pickReceipt';
+import { SCAN_TYPES, ScanDocumentType } from '../utils/scanType';
+import { haptics } from '../ui/haptics';
 import Txt from '../ui/Txt';
 import Card from '../ui/Card';
 import IconBadge from '../ui/IconBadge';
@@ -18,28 +20,72 @@ const TIPS: { icon: keyof typeof Ionicons.glyphMap; title: string; body: string 
   { icon: 'hand-left-outline', title: 'Hold steady', body: 'HissabAI warns you if the photo is blurry.' },
 ];
 
+const STATEMENT_TIPS = [
+  { icon: 'document-text-outline' as const, title: 'One page at a time', body: 'Scan each statement page separately.' },
+  { icon: 'contrast-outline' as const, title: 'Flat and evenly lit', body: 'Lay the page flat so no row is shadowed or curved.' },
+  { icon: 'shield-checkmark-outline' as const, title: 'We check the maths', body: 'Totals and running balances are verified before you save.' },
+];
+
 export default function AddExpenseScreen({ navigation }: Props) {
+  const [documentType, setDocumentType] = useState<ScanDocumentType>('auto');
+  const selected = SCAN_TYPES.find((t) => t.key === documentType) ?? SCAN_TYPES[0];
+  const isStatement = documentType === 'bank_statement';
+
   const chooseFromGallery = async () => {
     const uri = await pickReceiptFromGallery();
-    if (uri) navigation.navigate('ReceiptPreview', { capturedImages: [uri] });
+    if (uri) navigation.navigate('ReceiptPreview', { capturedImages: [uri], documentType });
   };
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Txt variant="title">How would you like to add it?</Txt>
       <Txt variant="body" color={colors.inkSecondary} style={styles.subtitle}>
-        Scan a receipt and HissabAI’s AI fills in the merchant, items and total for you.
+        Scan a document and HissabAI’s AI fills in the details for you.
+      </Txt>
+
+      <Txt variant="overline" color={colors.inkMuted} style={styles.pickerLabel}>
+        What are you adding?
+      </Txt>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.typeRow}
+        style={styles.typeScroll}
+      >
+        {SCAN_TYPES.map((t) => {
+          const active = t.key === documentType;
+          return (
+            <Pressable
+              key={t.key}
+              onPress={() => {
+                haptics.tap();
+                setDocumentType(t.key);
+              }}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              style={[styles.typeChip, active && styles.typeChipActive]}
+            >
+              <Ionicons name={t.icon} size={15} color={active ? colors.inkInverse : colors.primary} />
+              <Txt variant="label" color={active ? colors.inkInverse : colors.ink} style={styles.typeChipText}>
+                {t.label}
+              </Txt>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+      <Txt variant="caption" color={colors.inkSecondary} style={styles.typeHint}>
+        {selected.hint}
       </Txt>
 
       <Pressable
-        onPress={() => navigation.navigate('Camera')}
+        onPress={() => navigation.navigate('Camera', { documentType })}
         style={({ pressed }) => [pressed && styles.pressed]}
       >
         <Card style={[styles.option, styles.optionPrimary]}>
           <IconBadge icon="scan" color={colors.primary} tint={colors.primarySoft} size={52} />
           <View style={styles.optionText}>
             <View style={styles.titleRow}>
-              <Txt variant="heading">Scan receipt</Txt>
+              <Txt variant="heading">{isStatement ? 'Scan statement' : 'Scan document'}</Txt>
               <View style={styles.aiChip}>
                 <Txt variant="overline" color={colors.primary} style={styles.chipText}>
                   AI
@@ -47,7 +93,9 @@ export default function AddExpenseScreen({ navigation }: Props) {
               </View>
             </View>
             <Txt variant="caption" color={colors.inkSecondary}>
-              Receipts, utility bills and wallet screenshots
+              {isStatement
+                ? 'Photograph a bank statement page'
+                : 'Receipts, bank statements, bills and wallet screenshots'}
             </Txt>
           </View>
           <Ionicons name="chevron-forward" size={20} color={colors.primary} />
@@ -60,7 +108,7 @@ export default function AddExpenseScreen({ navigation }: Props) {
           <View style={styles.optionText}>
             <Txt variant="heading">Choose from gallery</Txt>
             <Txt variant="caption" color={colors.inkSecondary}>
-              Use a receipt photo you already have
+              Use a photo you already have
             </Txt>
           </View>
           <Ionicons name="chevron-forward" size={20} color={colors.inkMuted} />
@@ -88,7 +136,7 @@ export default function AddExpenseScreen({ navigation }: Props) {
 
       <SectionHeader title="Tips for a perfect scan" />
       <Card>
-        {TIPS.map((tip, i) => (
+        {(isStatement ? STATEMENT_TIPS : TIPS).map((tip, i) => (
           <View key={tip.title} style={[styles.tip, i > 0 && styles.tipGap]}>
             <IconBadge icon={tip.icon} color={colors.primary} tint={colors.primarySoft} size={36} />
             <View style={styles.tipText}>
@@ -107,7 +155,23 @@ export default function AddExpenseScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   content: { padding: spacing.xl, paddingBottom: spacing.xxxl },
-  subtitle: { marginTop: spacing.sm, marginBottom: spacing.xxl },
+  subtitle: { marginTop: spacing.sm, marginBottom: spacing.xl },
+  pickerLabel: { marginBottom: spacing.sm },
+  typeScroll: { marginHorizontal: -spacing.xl },
+  typeRow: { paddingHorizontal: spacing.xl, gap: spacing.sm },
+  typeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  typeChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  typeChipText: { marginLeft: 6 },
+  typeHint: { marginTop: spacing.sm, marginBottom: spacing.xl },
   option: {
     flexDirection: 'row',
     alignItems: 'center',

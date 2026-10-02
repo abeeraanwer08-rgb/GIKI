@@ -10,6 +10,8 @@ import { RootStackParamList, TabParamList } from '../navigation/AppNavigator';
 import { InsightsResponse } from '../types/insights';
 import { fetchInsights } from '../services/insightsService';
 import { getCategoryStyle } from '../utils/categoryStyle';
+import { PERIODS, PeriodKey, periodLabel, rangeFor } from '../utils/period';
+import { haptics } from '../ui/haptics';
 import { capitalize, formatMoney, formatShortDate, monthName } from '../utils/format';
 import Txt from '../ui/Txt';
 import Card from '../ui/Card';
@@ -35,17 +37,18 @@ export default function InsightsScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const [data, setData] = useState<InsightsResponse | null>(null);
   const [state, setState] = useState<LoadState>('loading');
+  const [period, setPeriod] = useState<PeriodKey>('all');
 
   const load = useCallback(async () => {
     setState('loading');
     try {
-      const result = await fetchInsights();
+      const result = await fetchInsights(rangeFor(period));
       setData(result);
       setState(result.summary.record_count === 0 ? 'empty' : 'loaded');
     } catch {
       setState('error');
     }
-  }, []);
+  }, [period]);
 
   useFocusEffect(
     useCallback(() => {
@@ -67,6 +70,31 @@ export default function InsightsScreen({ navigation }: Props) {
           accessibilityLabel="Refresh insights" hitSlop={8}>
         <Ionicons name="refresh" size={18} color={colors.inkSecondary} />
       </Pressable>
+    </View>
+  );
+
+  const periodBar = (
+    <View style={styles.periodRow}>
+      {PERIODS.map((p) => {
+        const active = p.key === period;
+        return (
+          <Pressable
+            key={p.key}
+            onPress={() => {
+              if (p.key === period) return;
+              haptics.tap();
+              setPeriod(p.key);
+            }}
+            accessibilityRole="button"
+            accessibilityState={{ selected: active }}
+            style={[styles.periodChip, active && styles.periodChipActive]}
+          >
+            <Txt variant="label" color={active ? colors.inkInverse : colors.inkSecondary}>
+              {p.label}
+            </Txt>
+          </Pressable>
+        );
+      })}
     </View>
   );
 
@@ -99,7 +127,11 @@ export default function InsightsScreen({ navigation }: Props) {
         <EmptyState
           icon="sparkles"
           title="No insights yet"
-          body="Save a few expenses first — insights are generated from your saved records."
+          body={
+            period === 'all'
+              ? 'Save a few expenses first — insights are generated from your saved records.'
+              : `No expenses in this period (${periodLabel(period).toLowerCase()}). Try a longer range.`
+          }
           actionLabel="Scan a receipt"
           onAction={() => navigation.navigate('Camera')}
         />
@@ -329,6 +361,7 @@ export default function InsightsScreen({ navigation }: Props) {
         contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.lg }]}
       >
         {header}
+        {periodBar}
         {content}
       </ScrollView>
     </View>
@@ -336,6 +369,18 @@ export default function InsightsScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
+  periodRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.xl },
+  periodChip: {
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    paddingVertical: 9,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  periodChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   screen: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
   content: { paddingHorizontal: spacing.xl, paddingBottom: spacing.xxl },

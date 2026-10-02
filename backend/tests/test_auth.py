@@ -166,9 +166,9 @@ class ProtectionTests(unittest.TestCase):
         def __init__(self) -> None:
             self.asked_for: list[str] = []
 
-        def list_financial_records(self, user_id: str, *, limit: int = 500):
+        def list_financial_records_page(self, user_id: str, *, limit: int, **_filters):
             self.asked_for.append(user_id)
-            return []
+            return [], 0
 
     def setUp(self) -> None:
         self.http = TestClient(app)

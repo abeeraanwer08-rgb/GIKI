@@ -14,7 +14,9 @@ class QualityStage:
         self.service = service
 
     def process(self, context: PipelineContext) -> PipelineResult:
-        quality = self.service.validate_image(context.image_bytes)
+        quality = self.service.validate_image(
+            context.image_bytes, context.document_type_hint
+        )
         context.quality_report = quality
 
         if not quality.passed:

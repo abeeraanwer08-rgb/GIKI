@@ -63,6 +63,9 @@ class FinancialSummary(BaseModel):
     top_merchants: list[CategoryTotal] = Field(default_factory=list)
     current_month: MonthForecast | None = None
     anomalies: list[SpendingAnomaly] = Field(default_factory=list)
+    # The inclusive date range the summary covers (None = unbounded).
+    start_date: str | None = None
+    end_date: str | None = None
 
 
 class FinancialCalculationsService:
@@ -77,8 +80,20 @@ class FinancialCalculationsService:
     def __init__(self, categorizer: CategorizationService | None = None) -> None:
         self._categorizer = categorizer or CategorizationService()
 
-    def summarize(self, records: list[dict[str, Any]], today: date | None = None) -> FinancialSummary:
+    def summarize(
+        self,
+        records: list[dict[str, Any]],
+        today: date | None = None,
+        *,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> FinancialSummary:
         today = today or date.today()
+        # A month-end forecast only makes sense when "today" is inside the
+        # range being summarised; for a past period it would be misleading.
+        forecast_applies = (not start_date or start_date <= today.isoformat()) and (
+            not end_date or end_date >= today.isoformat()
+        )
         category_totals: dict[str, list[float]] = defaultdict(list)
         month_totals: dict[str, list[float]] = defaultdict(list)
         merchant_totals: dict[str, list[float]] = defaultdict(list)
@@ -122,8 +137,12 @@ class FinancialCalculationsService:
                 for month, amounts in sorted(month_totals.items())
             ],
             top_merchants=self._to_totals(merchant_totals, limit=5),
-            current_month=self._forecast(month_totals, today) if records else None,
+            current_month=(
+                self._forecast(month_totals, today) if records and forecast_applies else None
+            ),
             anomalies=self._anomalies(by_category_rows),
+            start_date=start_date,
+            end_date=end_date,
         )
 
     @staticmethod

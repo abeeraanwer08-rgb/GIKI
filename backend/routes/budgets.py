@@ -2,6 +2,8 @@
 
 from typing import Callable
 
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
@@ -55,7 +57,10 @@ def _with_storage(action: Callable[[], BudgetOverview]) -> BudgetOverview:
 
 
 def _overview(supabase: SupabaseClient, service: BudgetService, user_id: str) -> BudgetOverview:
-    return service.overview(supabase.list_budgets(user_id), supabase.list_financial_records(user_id))
+    # Budgets only look at the current month, so only fetch from its first day.
+    month_start = date.today().replace(day=1).isoformat()
+    records = supabase.list_all_financial_records(user_id, start_date=month_start)
+    return service.overview(supabase.list_budgets(user_id), records)
 
 
 @router.get(

@@ -12,6 +12,8 @@ class FinancialRecordSaveResponse(BaseModel):
     record_id: str
     document_type: str
     category: str | None = None
+    # 1 for most documents; one per spending transaction for a bank statement.
+    records_saved: int = 1
 
 
 class FinancialRecordSummary(BaseModel):
@@ -27,9 +29,13 @@ class FinancialRecordSummary(BaseModel):
 
 
 class FinancialRecordListResponse(BaseModel):
-    """Saved records, most recent first."""
+    """One page of saved records, most recent first."""
 
     records: list[FinancialRecordSummary]
+    total: int = 0  # records matching the filters, across all pages
+    limit: int = 0
+    offset: int = 0
+    has_more: bool = False
 
 
 def to_summary(row: dict[str, Any], category: str | None = None) -> FinancialRecordSummary:

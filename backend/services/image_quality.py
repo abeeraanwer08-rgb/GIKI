@@ -27,6 +27,11 @@ BRIGHTNESS_TOO_DARK = 50          # mean pixel below this → too dark (FAIL)
 BRIGHTNESS_DARK_WARN = 70         # below this (but above TOO_DARK) → WARNING
 BRIGHTNESS_TOO_BRIGHT = 220       # above this → overexposed (FAIL)
 BRIGHTNESS_BRIGHT_WARN = 200      # above this (but below TOO_BRIGHT) → WARNING
+# A statement is a mostly white A4 page of small text, so a perfectly good scan
+# averages well above a receipt's brightness. Only a blown-out page should fail.
+PAGE_BRIGHTNESS_TOO_BRIGHT = 252
+PAGE_BRIGHTNESS_BRIGHT_WARN = 248
+PAGE_DOCUMENT_TYPES = {"bank_statement"}
 MIN_DIMENSION_PX = 1000           # minimum width AND height in pixels
 LONG_RECEIPT_RATIO = 3.5          # height / width ratio above this → long receipt
 
@@ -47,7 +52,9 @@ class ImageQualityService:
 
     # ── Public entry point ───────────────────────────────────────────────────
 
-    def validate_image(self, image_bytes: bytes) -> ImageQualityReport:
+    def validate_image(
+        self, image_bytes: bytes, document_type: str | None = None
+    ) -> ImageQualityReport:
         """
         Run all quality checks and return a consolidated report.
 
@@ -57,6 +64,8 @@ class ImageQualityService:
 
         Args:
             image_bytes: Raw image bytes (JPEG / PNG / WebP / BMP / TIFF).
+            document_type: Type chosen by the user, if any. Full-page documents
+                get a more lenient brightness ceiling than receipts.
 
         Returns:
             ImageQualityReport with passed, warnings, errors, is_long_receipt,
@@ -98,7 +107,7 @@ class ImageQualityService:
             score -= 15
 
         # B. Brightness ───────────────────────────────────────────────────────
-        brightness_result, mean_brightness = self._check_brightness(gray)
+        brightness_result, mean_brightness = self._check_brightness(gray, document_type)
         if brightness_result == "TOO_DARK_FAIL":
             errors.append(
                 f"Image is too dark (brightness: {mean_brightness:.1f}/255). "
@@ -166,15 +175,18 @@ class ImageQualityService:
             return "WARNING", lap_var
         return "PASS", lap_var
 
-    def _check_brightness(self, gray: np.ndarray) -> tuple[str, float]:
+    def _check_brightness(
+        self, gray: np.ndarray, document_type: str | None = None
+    ) -> tuple[str, float]:
         """Return (status, mean_brightness).  Status: PASS | TOO_DARK_FAIL | etc."""
         mean = float(gray.mean())
         if mean < BRIGHTNESS_TOO_DARK:
             return "TOO_DARK_FAIL", mean
         if mean < BRIGHTNESS_DARK_WARN:
             return "TOO_DARK_WARN", mean
-        if mean > BRIGHTNESS_TOO_BRIGHT:
+        page = document_type in PAGE_DOCUMENT_TYPES
+        if mean > (PAGE_BRIGHTNESS_TOO_BRIGHT if page else BRIGHTNESS_TOO_BRIGHT):
             return "TOO_BRIGHT_FAIL", mean
-        if mean > BRIGHTNESS_BRIGHT_WARN:
+        if mean > (PAGE_BRIGHTNESS_BRIGHT_WARN if page else BRIGHTNESS_BRIGHT_WARN):
             return "TOO_BRIGHT_WARN", mean
         return "PASS", mean

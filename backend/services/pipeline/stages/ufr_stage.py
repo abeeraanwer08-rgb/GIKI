@@ -4,6 +4,7 @@ from services.pipeline.pipeline_context import PipelineContext
 from services.pipeline.pipeline_result import PipelineResult
 from services.ufr_mapper import UniversalFinancialRecordMapper
 from services.utility_bill_analysis import UtilityBillAnalysisResponse
+from schemas.bank_statement import BankStatementAnalysisResponse
 from schemas.wallet import WalletAnalysisResponse
 
 
@@ -42,6 +43,15 @@ class UFRStage:
             and isinstance(context.parser_output, WalletAnalysisResponse)
         ):
             record = self.mapper.from_wallet_analysis(
+                context.parser_output,
+                confidence=confidence,
+                quality_score=quality_score,
+            )
+        elif (
+            context.document_type == "bank_statement"
+            and isinstance(context.parser_output, BankStatementAnalysisResponse)
+        ):
+            record = self.mapper.from_bank_statement_analysis(
                 context.parser_output,
                 confidence=confidence,
                 quality_score=quality_score,

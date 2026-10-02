@@ -62,6 +62,8 @@ class ReviewResponseBuilder:
             "discount_amount": record.metadata.discount_amount,
             "grand_total_amount": record.metadata.grand_total_amount,
         }
+        if record.metadata.details:
+            metadata["details"] = record.metadata.details
         metadata.update(processing_metadata or {})
 
         return ReviewResponse(
@@ -106,6 +108,9 @@ class ReviewResponseBuilder:
                 fields[name] = self._field(
                     self._first_item_metadata(record, name), confidence
                 )
+        elif record.document_type == "bank_statement":
+            for name in ("period_start", "period_end", "account_last4"):
+                fields[name] = self._field(record.metadata.details.get(name), confidence)
         elif record.document_type == "wallet_screenshot":
             for name in (
                 "transaction_type",

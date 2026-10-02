@@ -161,15 +161,116 @@ class SupabaseClient:
             json=payload,
         )
 
-    def list_financial_records(self, user_id: str, *, limit: int = 500) -> list[dict[str, Any]]:
-        """Fetch one user's saved records, most recent first, for calculations."""
+    def insert_financial_records(
+        self, payloads: list[dict[str, Any]], *, ignore_duplicates: bool = False
+    ) -> int:
+        """Insert several records in one request; returns how many were stored.
+
+        With ``ignore_duplicates`` rows whose id already exists are skipped
+        rather than failing the whole batch.
+        """
+        if not payloads:
+            return 0
+        if not ignore_duplicates:
+            self.request("POST", "/rest/v1/financial_records", json=payloads)
+            return len(payloads)
+        response = self.request(
+            "POST",
+            "/rest/v1/financial_records?on_conflict=id",
+            json=payloads,
+            headers={"Prefer": "resolution=ignore-duplicates,return=representation"},
+        )
+        return len(response.json())
+
+    @staticmethod
+    def _record_filters(
+        user_id: str,
+        start_date: str | None,
+        end_date: str | None,
+        category: str | None,
+    ) -> str:
+        query = f"&user_id=eq.{quote(user_id, safe='')}"
+        if start_date:
+            query += f"&transaction_date=gte.{quote(start_date, safe='')}"
+        if end_date:
+            query += f"&transaction_date=lte.{quote(end_date, safe='')}"
+        if category:
+            query += f"&category=eq.{quote(category, safe='')}"
+        return query
+
+    def list_financial_records(
+        self,
+        user_id: str,
+        *,
+        limit: int = 500,
+        offset: int = 0,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        category: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Fetch one page of a user's records, most recent first.
+
+        ``start_date`` / ``end_date`` are inclusive ``YYYY-MM-DD`` bounds.
+        """
         response = self.request(
             "GET",
             "/rest/v1/financial_records?select=*"
-            f"&user_id=eq.{quote(user_id, safe='')}"
-            f"&order=transaction_date.desc.nullslast&limit={limit}",
+            + self._record_filters(user_id, start_date, end_date, category)
+            + f"&order=transaction_date.desc.nullslast,id.asc&limit={limit}&offset={offset}",
         )
         return response.json()
+
+    def list_financial_records_page(
+        self,
+        user_id: str,
+        *,
+        limit: int,
+        offset: int = 0,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        category: str | None = None,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """One page of records plus the total number matching the filters."""
+        response = self.request(
+            "GET",
+            "/rest/v1/financial_records?select=*"
+            + self._record_filters(user_id, start_date, end_date, category)
+            + f"&order=transaction_date.desc.nullslast,id.asc&limit={limit}&offset={offset}",
+            headers={"Prefer": "count=exact"},
+        )
+        rows = response.json()
+        # Content-Range looks like "0-24/133" (or "*/0" when empty).
+        total = len(rows) + offset
+        content_range = response.headers.get("content-range", "")
+        if "/" in content_range:
+            tail = content_range.rsplit("/", 1)[1]
+            if tail.isdigit():
+                total = int(tail)
+        return rows, total
+
+    def list_all_financial_records(
+        self,
+        user_id: str,
+        *,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        page_size: int = 1000,
+        max_records: int = 20000,
+    ) -> list[dict[str, Any]]:
+        """Every record in the date range, fetched page by page (bounded)."""
+        rows: list[dict[str, Any]] = []
+        while len(rows) < max_records:
+            page = self.list_financial_records(
+                user_id,
+                limit=page_size,
+                offset=len(rows),
+                start_date=start_date,
+                end_date=end_date,
+            )
+            rows.extend(page)
+            if len(page) < page_size:
+                break
+        return rows
 
     def list_budgets(self, user_id: str) -> list[dict[str, Any]]:
         """Fetch every category budget belonging to one user."""

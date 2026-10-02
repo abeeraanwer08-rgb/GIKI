@@ -42,10 +42,29 @@ class FakeSupabaseClient:
             raise self.error
         self.payloads.append(payload)
 
-    def list_financial_records(self, user_id: str, *, limit: int = 500) -> list[dict[str, Any]]:
+    def list_financial_records_page(
+        self,
+        user_id: str,
+        *,
+        limit: int,
+        offset: int = 0,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        category: str | None = None,
+    ) -> tuple[list[dict[str, Any]], int]:
         if self.error is not None:
             raise self.error
-        return self.records
+        self.last_query = dict(
+            limit=limit, offset=offset, start_date=start_date, end_date=end_date, category=category
+        )
+        rows = [
+            r
+            for r in self.records
+            if (not start_date or (r.get("transaction_date") or "") >= start_date)
+            and (not end_date or (r.get("transaction_date") or "9999") <= end_date)
+            and (not category or r.get("category") == category)
+        ]
+        return rows[offset : offset + limit], len(rows)
 
 
 def make_record(
@@ -399,6 +418,7 @@ class FinancialRecordEndpointTests(unittest.TestCase):
                 "record_id": "record-1",
                 "document_type": "receipt",
                 "category": "groceries",
+                "records_saved": 1,
             },
         )
         self.assertEqual(self.client.payloads[0]["id"], "record-1")
@@ -553,14 +573,68 @@ class FinancialRecordEndpointTests(unittest.TestCase):
                         "currency": "PKR",
                         "category": "groceries",
                     }
-                ]
+                ],
+                "total": 1,
+                "limit": 50,
+                "offset": 0,
+                "has_more": False,
             },
         )
 
     def test_list_returns_empty_list_when_nothing_saved(self):
         response = self.http.get("/api/v1/financial-records")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"records": []})
+        self.assertEqual(
+            response.json(),
+            {"records": [], "total": 0, "limit": 50, "offset": 0, "has_more": False},
+        )
+
+    def _seed_five_records(self):
+        self.client.records = [
+            {
+                "id": f"r{i}",
+                "document_type": "receipt",
+                "merchant_provider": "Shop",
+                "transaction_date": f"2026-09-{10 + i:02d}",
+                "amount": 100.0 + i,
+                "currency": "PKR",
+                "category": "groceries" if i % 2 == 0 else "restaurant",
+            }
+            for i in range(5)
+        ]
+
+    def test_list_pages_through_records_and_reports_has_more(self):
+        self._seed_five_records()
+        first = self.http.get("/api/v1/financial-records?limit=2").json()
+        self.assertEqual([r["id"] for r in first["records"]], ["r0", "r1"])
+        self.assertEqual((first["total"], first["has_more"]), (5, True))
+        last = self.http.get("/api/v1/financial-records?limit=2&offset=4").json()
+        self.assertEqual([r["id"] for r in last["records"]], ["r4"])
+        self.assertFalse(last["has_more"])
+
+    def test_list_filters_by_date_range_and_category(self):
+        self._seed_five_records()
+        ranged = self.http.get(
+            "/api/v1/financial-records?start_date=2026-09-11&end_date=2026-09-13"
+        ).json()
+        self.assertEqual([r["id"] for r in ranged["records"]], ["r1", "r2", "r3"])
+        self.assertEqual(self.client.last_query["start_date"], "2026-09-11")
+        by_category = self.http.get("/api/v1/financial-records?category=Restaurant").json()
+        self.assertEqual([r["id"] for r in by_category["records"]], ["r1", "r3"])
+        self.assertEqual(self.client.last_query["category"], "restaurant")
+
+    def test_list_rejects_bad_ranges_and_page_sizes(self):
+        for query in (
+            "start_date=2026-09-20&end_date=2026-09-01",
+            "start_date=not-a-date",
+            "limit=0",
+            "limit=1000",
+            "offset=-1",
+        ):
+            with self.subTest(query):
+                self.assertEqual(
+                    self.http.get(f"/api/v1/financial-records?{query}").status_code, 422
+                )
 
     def test_list_returns_503_when_storage_is_unavailable(self):
         self.client.error = SupabaseConnectionError("simulated database failure")

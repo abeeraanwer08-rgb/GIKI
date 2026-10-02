@@ -55,6 +55,13 @@ class ConfidenceService:
             "billing_period",
             "due_date",
         ),
+        "bank_statement": (
+            "merchant",
+            "document_date",
+            "currency",
+            "total_amount",
+            "items",
+        ),
         "wallet_screenshot": (
             "merchant",
             "document_date",

@@ -1,6 +1,8 @@
 """API routes for AI-generated financial insights and natural-language Q&A."""
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import date
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from routes.auth import get_current_user
 from schemas.insights import AskRequest, AskResponse, InsightsResponse
@@ -35,17 +37,42 @@ def get_supabase_dependency() -> SupabaseClient:
     return get_supabase_client()
 
 
+class DateRange:
+    """Optional inclusive ``start_date`` / ``end_date`` query parameters."""
+
+    def __init__(
+        self,
+        start_date: date | None = Query(None, description="Inclusive start, YYYY-MM-DD."),
+        end_date: date | None = Query(None, description="Inclusive end, YYYY-MM-DD."),
+    ) -> None:
+        if start_date and end_date and start_date > end_date:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={"error": "start_date must not be after end_date."},
+            )
+        self.start_date = start_date.isoformat() if start_date else None
+        self.end_date = end_date.isoformat() if end_date else None
+
+
 def _load_summary(
-    supabase: SupabaseClient, calculations: FinancialCalculationsService, user_id: str
+    supabase: SupabaseClient,
+    calculations: FinancialCalculationsService,
+    user_id: str,
+    period: DateRange | None = None,
 ):
+    period = period or DateRange()
     try:
-        records = supabase.list_financial_records(user_id)
+        records = supabase.list_all_financial_records(
+            user_id, start_date=period.start_date, end_date=period.end_date
+        )
     except (SupabaseConfigurationError, SupabaseConnectionError) as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={"error": "Financial record storage is unavailable."},
         ) from exc
-    return calculations.summarize(records)
+    return calculations.summarize(
+        records, start_date=period.start_date, end_date=period.end_date
+    )
 
 
 @router.get(
@@ -58,11 +85,12 @@ def _load_summary(
     ),
 )
 def get_summary(
+    period: DateRange = Depends(),
     user: TokenUser = Depends(get_current_user),
     supabase: SupabaseClient = Depends(get_supabase_dependency),
     calculations: FinancialCalculationsService = Depends(get_calculations_service),
 ) -> FinancialSummary:
-    return _load_summary(supabase, calculations, user.id)
+    return _load_summary(supabase, calculations, user.id, period)
 
 
 @router.get(
@@ -74,16 +102,19 @@ def get_summary(
         "records, then asks the LLM to narrate insights and budgeting "
         "recommendations grounded in that summary. Every figure in the "
         "summary is computed deterministically; the LLM never invents "
-        "numbers."
+        "numbers.\n\n"
+        "Optional `start_date` / `end_date` (inclusive, YYYY-MM-DD) limit the "
+        "summary to a period; every record in the range is used."
     ),
 )
 async def get_insights(
+    period: DateRange = Depends(),
     user: TokenUser = Depends(get_current_user),
     supabase: SupabaseClient = Depends(get_supabase_dependency),
     calculations: FinancialCalculationsService = Depends(get_calculations_service),
     reasoning: FinancialReasoningService = Depends(get_reasoning_service),
 ) -> InsightsResponse:
-    summary = _load_summary(supabase, calculations, user.id)
+    summary = _load_summary(supabase, calculations, user.id, period)
 
     try:
         generated = await reasoning.generate_insights(summary)
@@ -112,6 +143,7 @@ async def get_insights(
 )
 async def ask_insights(
     request: AskRequest,
+    period: DateRange = Depends(),
     user: TokenUser = Depends(get_current_user),
     supabase: SupabaseClient = Depends(get_supabase_dependency),
     calculations: FinancialCalculationsService = Depends(get_calculations_service),
@@ -123,7 +155,7 @@ async def ask_insights(
             detail={"error": "question must not be blank."},
         )
 
-    summary = _load_summary(supabase, calculations, user.id)
+    summary = _load_summary(supabase, calculations, user.id, period)
 
     try:
         generated = await reasoning.answer_question(summary, request.question)

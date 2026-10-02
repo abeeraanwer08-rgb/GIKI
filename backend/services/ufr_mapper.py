@@ -14,8 +14,11 @@ from schemas.ufr import (
     UniversalFinancialRecordItem,
     UniversalFinancialRecordMetadata,
 )
+from schemas.bank_statement import BankStatementAnalysisResponse
 from schemas.wallet import WalletAnalysisResponse
+from parsers.bank_statement_parser import BANK_STATEMENT_PARSER_VERSION
 from parsers.wallet_parser import WALLET_PARSER_VERSION
+from services.categorization import CategorizationService
 from services.utility_bill_analysis import (
     UTILITY_BILL_PARSER_VERSION,
     UtilityBillAnalysisResponse,
@@ -183,5 +186,78 @@ class UniversalFinancialRecordMapper:
                 confidence=confidence_value,
                 quality_score=quality_score,
                 parser_version=WALLET_PARSER_VERSION,
+            ),
+        )
+
+    def from_bank_statement_analysis(
+        self,
+        analysis: BankStatementAnalysisResponse,
+        *,
+        confidence: str | float | None = None,
+        quality_score: int | None = None,
+    ) -> UniversalFinancialRecord:
+        """
+        Map a statement into one UFR whose items are the *debits* (spending).
+
+        Credits are money in, not spending, so they are summarised in
+        ``metadata.details`` instead of becoming items. ``total_amount`` is the
+        sum of the debit items, which keeps the persistence layer's item/total
+        reconciliation consistent.
+        """
+        if isinstance(confidence, str):
+            confidence_value = CONFIDENCE_SCORES.get(confidence.lower())
+        else:
+            confidence_value = confidence
+
+        categorizer = CategorizationService()
+        items: list[UniversalFinancialRecordItem] = []
+        for txn in analysis.transactions:
+            if not txn.debit or txn.debit <= 0:
+                continue
+            items.append(
+                UniversalFinancialRecordItem(
+                    description=txn.description or "Bank transaction",
+                    amount=txn.debit,
+                    category=categorizer.categorize(
+                        document_type=None,
+                        merchant=txn.description,
+                    ).category,
+                    metadata={
+                        "date": txn.date,
+                        "balance": txn.balance,
+                        "reference": txn.reference,
+                    },
+                )
+            )
+
+        credits = [t for t in analysis.transactions if t.credit and t.credit > 0]
+        dated = sorted(t.date for t in analysis.transactions if t.date)
+        total_debits = round(sum(i.amount or 0.0 for i in items), 2)
+
+        return UniversalFinancialRecord(
+            record_id=str(uuid4()),
+            document_type="bank_statement",
+            merchant=analysis.bank_name,
+            document_date=analysis.period_end or (dated[-1] if dated else None),
+            currency=analysis.currency,
+            total_amount=total_debits if items else None,
+            payment_method="bank_transfer",
+            category=None,
+            items=items,
+            metadata=UniversalFinancialRecordMetadata(
+                source="bank_statement_analysis",
+                confidence=confidence_value,
+                quality_score=quality_score,
+                parser_version=BANK_STATEMENT_PARSER_VERSION,
+                details={
+                    "account_last4": analysis.account_last4,
+                    "period_start": analysis.period_start,
+                    "period_end": analysis.period_end,
+                    "opening_balance": analysis.opening_balance,
+                    "closing_balance": analysis.closing_balance,
+                    "debit_count": len(items),
+                    "credit_count": len(credits),
+                    "total_credits": round(sum(t.credit or 0.0 for t in credits), 2),
+                },
             ),
         )

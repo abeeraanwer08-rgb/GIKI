@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import math
+import uuid
+from collections import Counter
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -10,8 +12,12 @@ from schemas.ufr import UniversalFinancialRecord
 from services.categorization import CategorizationService
 from services.supabase_client import (
     SupabaseClient,
+    SupabaseConflictError,
     get_supabase_client,
 )
+
+# Fixed namespace so a statement row's id depends only on its content.
+_STATEMENT_ROW_NAMESPACE = uuid.UUID("6f1d3b8e-5a0c-4c53-9a47-2a1f6f0d9a11")
 
 
 class FinancialRecordValidationError(ValueError):
@@ -65,8 +71,11 @@ class FinancialRecordPersistenceService:
         *,
         user_id: str,
         confirm_total_mismatch: bool = False,
-    ) -> None:
+    ) -> int:
         """Validate and insert a UFR, preserving duplicate-ID safety.
+
+        Returns the number of rows stored: 1 for ordinary documents, one per
+        spending transaction for a bank statement.
 
         Raises:
             FinancialRecordValidationError: Hard schema/data errors that cannot
@@ -78,8 +87,80 @@ class FinancialRecordPersistenceService:
         """
         self.validate(record)
         self._check_total_reconciliation(record, confirm_total_mismatch)
+        if record.document_type == "bank_statement":
+            return self._save_statement(record, user_id)
         self._assign_category(record)
         self.client.insert_financial_record(self.to_database_payload(record, user_id))
+        return 1
+
+    def _save_statement(self, record: UniversalFinancialRecord, user_id: str) -> int:
+        """Store each spending row of a statement as its own record.
+
+        Spending insights group by merchant, category and month, so a 40-row
+        statement saved as one lump would be useless to them. Row ids are
+        derived from the row's content, which makes re-saving the same
+        statement (or an overlapping one) skip rows already stored instead of
+        double-counting them.
+        """
+        rows = self.statement_rows(record, user_id)
+        if not rows:
+            raise FinancialRecordValidationError(
+                ["The statement has no spending transactions to save."]
+            )
+        inserted = self.client.insert_financial_records(rows, ignore_duplicates=True)
+        if inserted == 0:
+            raise SupabaseConflictError("Every transaction in this statement is already saved.")
+        return inserted
+
+    def statement_rows(
+        self, record: UniversalFinancialRecord, user_id: str
+    ) -> list[dict[str, Any]]:
+        occurrences: Counter[tuple] = Counter()
+        rows: list[dict[str, Any]] = []
+        for item in record.items:
+            if item.amount is None or item.amount <= 0:
+                continue
+            txn_date = item.metadata.get("date") or record.document_date
+            key = (
+                txn_date,
+                item.description.strip().lower(),
+                round(item.amount, 2),
+                item.metadata.get("balance"),
+            )
+            occurrences[key] += 1  # two identical same-day rows are two transactions
+            row_id = uuid.uuid5(
+                _STATEMENT_ROW_NAMESPACE, "|".join(map(str, (user_id, *key, occurrences[key])))
+            )
+            if item.category and item.category.strip():
+                category = item.category.strip().lower()
+            else:
+                category = self._categorizer.categorize(
+                    document_type=None, merchant=item.description
+                ).category
+            rows.append(
+                {
+                    "id": str(row_id),
+                    "user_id": user_id,
+                    "document_type": record.document_type,
+                    "source": record.metadata.source,
+                    "transaction_date": txn_date,
+                    "merchant_provider": item.description,
+                    "amount": item.amount,
+                    "currency": record.currency,
+                    "category": category,
+                    "payment_method": record.payment_method,
+                    "items": [item.model_dump(mode="json")],
+                    "metadata": {
+                        **record.metadata.model_dump(mode="json"),
+                        "category_source": "statement_row",
+                        "statement_record_id": record.record_id,
+                        "bank_name": record.merchant,
+                    },
+                    "confidence": record.metadata.confidence,
+                    "parser_version": record.metadata.parser_version,
+                }
+            )
+        return rows
 
     def _assign_category(self, record: UniversalFinancialRecord) -> None:
         """Keep a user-chosen category; otherwise derive one so insights can group it."""

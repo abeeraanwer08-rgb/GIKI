@@ -29,10 +29,18 @@ class FakeSupabaseClient:
         self.records = records if records is not None else []
         self.error = error
 
-    def list_financial_records(self, user_id: str, *, limit: int = 500) -> list[dict[str, Any]]:
+    def list_all_financial_records(
+        self, user_id: str, *, start_date: str | None = None, end_date: str | None = None
+    ) -> list[dict[str, Any]]:
         if self.error is not None:
             raise self.error
-        return self.records
+        self.last_range = (start_date, end_date)
+        return [
+            r
+            for r in self.records
+            if (not start_date or (r.get("transaction_date") or "") >= start_date)
+            and (not end_date or (r.get("transaction_date") or "9999") <= end_date)
+        ]
 
 
 class FakeReasoningService:
@@ -136,6 +144,33 @@ class InsightsEndpointTests(unittest.TestCase):
         self.assertIn("current_month", body)
         self.assertIn("anomalies", body)
         self.assertEqual(self.reasoning.summaries_seen, [])
+
+    def test_summary_can_be_limited_to_a_date_range(self):
+        body = self.http.get(
+            "/api/v1/insights/summary?start_date=2026-08-15&end_date=2026-08-31"
+        ).json()
+        self.assertEqual((body["record_count"], body["total_amount"]), (1, 500.0))
+        self.assertEqual((body["start_date"], body["end_date"]), ("2026-08-15", "2026-08-31"))
+        self.assertEqual(self.supabase.last_range, ("2026-08-15", "2026-08-31"))
+
+    def test_range_also_applies_to_ai_insights_and_questions(self):
+        self.http.get("/api/v1/insights?start_date=2026-08-15")
+        self.assertEqual(self.reasoning.summaries_seen[-1].total_amount, 500.0)
+        self.http.post(
+            "/api/v1/insights/ask?end_date=2026-08-14", json={"question": "How much?"}
+        )
+        self.assertEqual(self.reasoning.summaries_seen[-1].total_amount, 500.0)
+
+    def test_invalid_range_is_rejected(self):
+        for query in ("start_date=2026-09-01&end_date=2026-08-01", "start_date=nope"):
+            with self.subTest(query):
+                self.assertEqual(self.http.get(f"/api/v1/insights/summary?{query}").status_code, 422)
+
+    def test_forecast_only_appears_when_the_range_includes_today(self):
+        past = self.http.get("/api/v1/insights/summary?end_date=2026-08-31").json()
+        self.assertIsNone(past["current_month"])
+        current = self.http.get("/api/v1/insights/summary").json()
+        self.assertIsNotNone(current["current_month"])
 
     def test_ask_answers_grounded_in_summary(self):
         response = self.http.post(

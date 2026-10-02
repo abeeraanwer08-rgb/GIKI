@@ -73,7 +73,9 @@ class FakeBudgetStore:
         self._check()
         return list(self.budgets.values())
 
-    def list_financial_records(self, user_id: str, *, limit: int = 500) -> list[dict[str, Any]]:
+    def list_all_financial_records(
+        self, user_id: str, *, start_date: str | None = None, end_date: str | None = None
+    ) -> list[dict[str, Any]]:
         self._check()
         return [{"amount": 400.0, "category": "groceries", "transaction_date": date.today().isoformat()}]
 

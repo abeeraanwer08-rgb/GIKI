@@ -18,6 +18,7 @@ from services.receipt_analysis import ReceiptAnalysisService
 from services.ufr_mapper import UniversalFinancialRecordMapper
 from services.validation import ReceiptValidationService
 from services.utility_bill_analysis import UtilityBillAnalysisService
+from parsers.bank_statement_parser import BankStatementParser
 from parsers.wallet_parser import WalletParser
 from services.confidence import ConfidenceService
 from services.review_hints import ReviewHintService
@@ -38,6 +39,7 @@ class FinancialPipeline:
         ufr_mapper: UniversalFinancialRecordMapper | None = None,
         utility_bill_service: UtilityBillAnalysisService | None = None,
         wallet_parser: WalletParser | None = None,
+        bank_statement_parser: BankStatementParser | None = None,
         confidence_service: ConfidenceService | None = None,
         review_hint_service: ReviewHintService | None = None,
         review_response_builder: ReviewResponseBuilder | None = None,
@@ -51,6 +53,7 @@ class FinancialPipeline:
         ufr_mapper = ufr_mapper or UniversalFinancialRecordMapper()
         utility_bill_service = utility_bill_service or UtilityBillAnalysisService()
         wallet_parser = wallet_parser or WalletParser()
+        bank_statement_parser = bank_statement_parser or BankStatementParser()
         confidence_service = confidence_service or ConfidenceService()
         review_hint_service = review_hint_service or ReviewHintService()
         review_response_builder = review_response_builder or ReviewResponseBuilder()
@@ -58,6 +61,7 @@ class FinancialPipeline:
             receipt_parser=receipt_service,
             utility_bill_parser=utility_bill_service,
             wallet_parser=wallet_parser,
+            bank_statement_parser=bank_statement_parser,
             normalization_service=normalization_service,
         )
 
@@ -68,6 +72,7 @@ class FinancialPipeline:
             validation_service,
             utility_bill_service,
             wallet_parser,
+            bank_statement_parser,
         )
         self.ufr_stage = UFRStage(ufr_mapper)
         self.confidence_stage = ConfidenceStage(confidence_service)

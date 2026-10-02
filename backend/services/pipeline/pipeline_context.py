@@ -23,6 +23,8 @@ class PipelineContext:
     image_bytes: bytes
     filename: str
     content_type: str
+    # Document type the user chose explicitly; skips the heuristic classifier.
+    document_type_hint: Optional[str] = None
 
     quality_report: Optional[ImageQualityReport] = None
     classification: Optional[DocumentClassificationResult] = None

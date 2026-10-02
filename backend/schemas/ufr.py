@@ -48,6 +48,8 @@ class UniversalFinancialRecordMetadata(BaseModel):
     parser_version: str
     confirm_total_mismatch: Optional[bool] = None
     category_source: Optional[str] = None
+    # Document-specific facts that have no generic field (e.g. statement period).
+    details: dict[str, Any] = Field(default_factory=dict)
 
 
 class UniversalFinancialRecord(BaseModel):

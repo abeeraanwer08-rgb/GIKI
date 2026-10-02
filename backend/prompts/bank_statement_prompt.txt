@@ -7,15 +7,16 @@ The JSON must follow this exact schema:
   "bank_name": "<bank name printed on the statement, or null>",
   "account_number": "<account number or IBAN as printed, or null>",
   "currency": "<3-letter currency code or null>",
-  "period_start": "<YYYY-MM-DD or null>",
-  "period_end": "<YYYY-MM-DD or null>",
+  "period_start": "<YYYY-MM-DD, or the date as printed, or null>",
+  "period_end": "<YYYY-MM-DD, or the date as printed, or null>",
   "opening_balance": <number or null>,
   "closing_balance": <number or null>,
   "total_debits": <number printed as total withdrawals/debits, or null>,
   "total_credits": <number printed as total deposits/credits, or null>,
   "transactions": [
     {
-      "date": "<YYYY-MM-DD or null>",
+      "date": "<YYYY-MM-DD if you can read it with certainty, else null>",
+      "date_text": "<the date exactly as printed in the row, e.g. 05/09/2026 or 05-Sep, or null>",
       "description": "<narration exactly as printed>",
       "debit": <number or null>,
       "credit": <number or null>,
@@ -34,7 +35,10 @@ Rules:
 - Do not infer, calculate, or guess missing values. Do not compute totals yourself;
   only copy totals that are printed.
 - Remove thousands separators from numbers (1,250.00 -> 1250.00).
-- Convert dates to YYYY-MM-DD. If a row shows only day and month, use the year of the
-  statement period when it is clearly printed, otherwise null.
+- Always copy the printed date into "date_text" exactly as it appears. Only fill "date"
+  when the full year is printed; otherwise leave it null and the system works the year out.
+- If a row prints no date (some statements show the date only on the first row of a day),
+  leave both date fields null for that row. Do not copy a date from another row.
+- Do not output "balance brought forward" / "balance carried forward" lines as transactions.
 - Use PKR when the statement clearly shows Pakistani rupees, Rs, or PKR.
 - Return only the JSON object.

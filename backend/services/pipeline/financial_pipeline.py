@@ -1,6 +1,7 @@
 """Financial document pipeline orchestrator."""
 
 from schemas.receipt import ReceiptUploadResponse
+from services.ai_document_classifier import AIDocumentClassifier
 from services.document_classifier import DocumentClassifierService
 from services.image_quality import ImageQualityService
 from services.normalization import NormalizationService
@@ -19,6 +20,7 @@ from services.ufr_mapper import UniversalFinancialRecordMapper
 from services.validation import ReceiptValidationService
 from services.utility_bill_analysis import UtilityBillAnalysisService
 from parsers.bank_statement_parser import BankStatementParser
+from parsers.invoice_parser import InvoiceParser
 from parsers.wallet_parser import WalletParser
 from services.confidence import ConfidenceService
 from services.review_hints import ReviewHintService
@@ -33,6 +35,7 @@ class FinancialPipeline:
         *,
         quality_service: ImageQualityService | None = None,
         classifier_service: DocumentClassifierService | None = None,
+        ai_classifier: AIDocumentClassifier | None = None,
         receipt_service: ReceiptAnalysisService | None = None,
         normalization_service: NormalizationService | None = None,
         validation_service: ReceiptValidationService | None = None,
@@ -40,6 +43,7 @@ class FinancialPipeline:
         utility_bill_service: UtilityBillAnalysisService | None = None,
         wallet_parser: WalletParser | None = None,
         bank_statement_parser: BankStatementParser | None = None,
+        invoice_parser: InvoiceParser | None = None,
         confidence_service: ConfidenceService | None = None,
         review_hint_service: ReviewHintService | None = None,
         review_response_builder: ReviewResponseBuilder | None = None,
@@ -54,6 +58,7 @@ class FinancialPipeline:
         utility_bill_service = utility_bill_service or UtilityBillAnalysisService()
         wallet_parser = wallet_parser or WalletParser()
         bank_statement_parser = bank_statement_parser or BankStatementParser()
+        invoice_parser = invoice_parser or InvoiceParser()
         confidence_service = confidence_service or ConfidenceService()
         review_hint_service = review_hint_service or ReviewHintService()
         review_response_builder = review_response_builder or ReviewResponseBuilder()
@@ -62,17 +67,21 @@ class FinancialPipeline:
             utility_bill_parser=utility_bill_service,
             wallet_parser=wallet_parser,
             bank_statement_parser=bank_statement_parser,
+            invoice_parser=invoice_parser,
             normalization_service=normalization_service,
         )
 
         self.quality_stage = QualityStage(quality_service)
-        self.classifier_stage = ClassifierStage(classifier_service)
+        self.classifier_stage = ClassifierStage(
+            classifier_service, ai_classifier or AIDocumentClassifier()
+        )
         self.parser_stage = ParserStage(parser_registry)
         self.validation_stage = ValidationStage(
             validation_service,
             utility_bill_service,
             wallet_parser,
             bank_statement_parser,
+            invoice_parser,
         )
         self.ufr_stage = UFRStage(ufr_mapper)
         self.confidence_stage = ConfidenceStage(confidence_service)
@@ -81,13 +90,13 @@ class FinancialPipeline:
 
     async def process(self, context: PipelineContext) -> PipelineResult:
         """Run the pipeline and return a result containing the legacy response."""
-        for stage in (
-            self.quality_stage,
-            self.classifier_stage,
-        ):
-            result = stage.process(context)
-            if not result.success:
-                return result
+        result = self.quality_stage.process(context)
+        if not result.success:
+            return result
+
+        result = await self.classifier_stage.classify(context)
+        if not result.success:
+            return result
 
         result = await self.parser_stage.process(context)
         if not result.success:

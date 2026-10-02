@@ -12,6 +12,7 @@ from typing import Any, Callable, Optional, Protocol
 
 from schemas.receipt import ReceiptAnalysisResponse
 from parsers.bank_statement_parser import BankStatementParser
+from parsers.invoice_parser import InvoiceParser
 from parsers.wallet_parser import WalletParser
 from services.normalization import NormalizationService
 from services.receipt_analysis import ReceiptAnalysisService
@@ -63,6 +64,7 @@ class ParserRegistry:
         utility_bill_parser: UtilityBillAnalysisService | None = None,
         wallet_parser: WalletParser | None = None,
         bank_statement_parser: BankStatementParser | None = None,
+        invoice_parser: InvoiceParser | None = None,
         normalization_service: NormalizationService | None = None,
     ):
         normalization_service = normalization_service or NormalizationService()
@@ -70,6 +72,7 @@ class ParserRegistry:
         utility_bill_parser = utility_bill_parser or UtilityBillAnalysisService()
         wallet_parser = wallet_parser or WalletParser()
         bank_statement_parser = bank_statement_parser or BankStatementParser()
+        invoice_parser = invoice_parser or InvoiceParser()
 
         self._registrations: dict[str, ParserRegistration] = {}
         self.register(
@@ -93,6 +96,11 @@ class ParserRegistry:
             "bank_statement",
             bank_statement_parser,
             to_legacy_response=bank_statement_parser.to_legacy_receipt_response,
+        )
+        self.register(
+            "invoice",
+            invoice_parser,
+            to_legacy_response=invoice_parser.to_legacy_receipt_response,
         )
 
     def register(

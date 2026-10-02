@@ -21,7 +21,7 @@ ALLOWED_IMAGE_TYPES = {
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
 # What the user may pick explicitly. Anything else (or "auto") uses the classifier.
-SELECTABLE_DOCUMENT_TYPES = {"receipt", "bank_statement", "utility_bill", "wallet_screenshot"}
+SELECTABLE_DOCUMENT_TYPES = {"receipt", "invoice", "bank_statement", "utility_bill", "wallet_screenshot"}
 
 _financial_pipeline = FinancialPipeline()
 
@@ -40,7 +40,7 @@ _financial_pipeline = FinancialPipeline()
         "Returns HTTP 400 if image quality fails. "
         "Returns HTTP 400 with `status='unsupported_document'` if the image is "
         "not a supported document type. Receipts, bank statements, wallet "
-        "screenshots and utility bills are supported; invoices are planned. "
+        "screenshots, utility bills and invoices are supported. "
         "Send `document_type` (e.g. `bank_statement`) to skip auto-detection — "
         "recommended for statements, which the automatic classifier can only "
         "guess at. "
@@ -52,7 +52,7 @@ async def upload_receipt(
     document_type: str | None = Form(
         None,
         description=(
-            "Optional: receipt, bank_statement, utility_bill or wallet_screenshot. "
+            "Optional: receipt, invoice, bank_statement, utility_bill or wallet_screenshot. "
             "Omit or send 'auto' to classify automatically."
         ),
     ),

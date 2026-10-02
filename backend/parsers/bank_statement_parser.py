@@ -21,6 +21,7 @@ from openai import AsyncOpenAI, OpenAIError
 from schemas.bank_statement import BankStatementAnalysisResponse, BankTransaction
 from schemas.receipt import ReceiptAnalysisResponse, ReceiptItem, ReceiptValidationReport
 from services.categorization import CategorizationService
+from services.statement_dates import parse_statement_date, to_iso
 
 logger = logging.getLogger(__name__)
 
@@ -65,13 +66,11 @@ def _text(value: Any) -> str | None:
 
 def _iso_date(value: Any) -> str | None:
     """Accept only a real YYYY-MM-DD date; anything else is treated as unreadable."""
-    text = _text(value)
-    if not text:
-        return None
-    try:
-        return date.fromisoformat(text[:10]).isoformat()
-    except ValueError:
-        return None
+    return to_iso(value)
+
+
+# A printed "balance brought/carried forward" line is not a transaction.
+_CARRY_ROW = re.compile(r"(balance|bal\.?)\s*(b/?f|c/?f|brought|carried|forward)|opening balance|closing balance|^b/?f$|^c/?f$", re.I)
 
 
 def mask_account_number(value: Any) -> str | None:
@@ -223,6 +222,29 @@ class BankStatementParser:
             if txn.balance is not None:
                 previous = txn.balance
 
+        undated = sum(1 for t in txns if not t.date and (t.debit or t.credit))
+        if undated:
+            warnings.append(
+                f"{undated} transaction{'s' if undated != 1 else ''} had no readable date. "
+                "They will be filed on the statement end date unless you set a date."
+            )
+        inferred = sum(1 for t in txns if t.date_inferred)
+        if inferred:
+            warnings.append(
+                f"{inferred} transaction{'s' if inferred != 1 else ''} printed no date and "
+                "were given the previous row's date. Check them."
+            )
+        if analysis.period_start and analysis.period_end:
+            outside = sum(
+                1 for t in txns
+                if t.date and not analysis.period_start <= t.date <= analysis.period_end
+            )
+            if outside:
+                warnings.append(
+                    f"{outside} transaction{'s are' if outside != 1 else ' is'} dated outside "
+                    "the statement period."
+                )
+
         if analysis.period_start and analysis.period_end and analysis.period_start > analysis.period_end:
             warnings.append("The statement period starts after it ends.")
 
@@ -270,20 +292,40 @@ class BankStatementParser:
         if not isinstance(data, dict):
             data = {}
 
+        period_start = _iso_date(data.get("period_start")) or parse_statement_date(data.get("period_start"))
+        period_end = _iso_date(data.get("period_end")) or parse_statement_date(data.get("period_end"))
+        # A period printed as "01/09/2026" is read before it is used to place row dates.
         transactions: list[BankTransaction] = []
         for raw in (data.get("transactions") or [])[:MAX_TRANSACTIONS]:
             if not isinstance(raw, dict):
                 continue
+            debit, credit = _movement(raw.get("debit")), _movement(raw.get("credit"))
+            description = _text(raw.get("description")) or ""
+            if debit is None and credit is None and (not description or _CARRY_ROW.search(description)):
+                continue  # a balance line, not a transaction
+            printed = _text(raw.get("date_text")) or _text(raw.get("date"))
+            row_date = _iso_date(raw.get("date")) or parse_statement_date(
+                printed, period_start=period_start, period_end=period_end
+            )
             transactions.append(
                 BankTransaction(
-                    date=_iso_date(raw.get("date")),
-                    description=_text(raw.get("description")) or "",
-                    debit=_movement(raw.get("debit")),
-                    credit=_movement(raw.get("credit")),
+                    date=row_date,
+                    description=description,
+                    debit=debit,
+                    credit=credit,
                     balance=_number(raw.get("balance")),
                     reference=_text(raw.get("reference")),
                 )
             )
+
+        # Many statements print the date only on the first row of each day. Give an
+        # undated row the previous row's date, but say so, so the user can check it.
+        last_date: str | None = None
+        for txn in transactions:
+            if txn.date:
+                last_date = txn.date
+            elif last_date:
+                txn.date, txn.date_inferred = last_date, True
 
         return BankStatementAnalysisResponse(
             **base_meta,
@@ -292,8 +334,8 @@ class BankStatementParser:
             bank_name=_text(data.get("bank_name")),
             account_last4=mask_account_number(data.get("account_number")),
             currency=_text(data.get("currency")),
-            period_start=_iso_date(data.get("period_start")),
-            period_end=_iso_date(data.get("period_end")),
+            period_start=period_start,
+            period_end=period_end,
             opening_balance=_number(data.get("opening_balance")),
             closing_balance=_number(data.get("closing_balance")),
             stated_total_debits=_number(data.get("total_debits")),

@@ -225,3 +225,6 @@ mobile/.expo/
 mobile/dist/
 mobile/web-build/
 mobile/.env
+
+# Local database file and generated secrets (SQLite storage)
+backend/data/

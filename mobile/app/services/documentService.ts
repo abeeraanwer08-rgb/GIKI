@@ -161,6 +161,14 @@ function uploadErrorFor(status: number, body: unknown): UploadError {
   if (status === 415) {
     return new UploadError(status, 'That file type isn’t supported. Use a JPEG or PNG photo.', true);
   }
+  if (status === 502 || status === 503) {
+    const message = (body as { detail?: { message?: string } } | null)?.detail?.message;
+    return new UploadError(
+      status,
+      message ?? 'The AI service is unavailable right now. Please try again in a moment.',
+      false,
+    );
+  }
   if (status === 422) {
     const d = (body as { detail?: { error?: string; message?: string } } | null)?.detail;
     if (d?.error === 'Unusable PDF' && d.message) return new UploadError(status, d.message, true);

@@ -9,14 +9,8 @@ about your money in English, Urdu or Roman Urdu.
 It ships as a **mobile app** (Expo / React Native) and a **website** (React) that
 share one **FastAPI backend**.
 
-<!-- mobile:start -->
 > **This branch (`mobile-app`)** contains the backend and the complete mobile app.
 > The website lives on the `website` branch.
-<!-- mobile:end -->
-<!-- web:start -->
-> **This branch (`website`)** contains the backend and the complete website.
-> The mobile app lives on the `mobile-app` branch.
-<!-- web:end -->
 
 ---
 
@@ -84,14 +78,7 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 Check it: `curl http://localhost:8000/health` → `{"status":"ok"}`.
 Interactive API docs: <http://localhost:8000/docs>.
 
-<!-- web:start -->
-The website runs in a browser, so the backend must allow its address. The
-defaults allow the local dev server (`http://localhost:5173`) and `vite preview`
-(`http://localhost:4173`). For a deployed site set
-`CORS_ALLOW_ORIGINS=https://your-site.example.com` before starting the backend.
-<!-- web:end -->
 
-<!-- mobile:start -->
 ## 2. Run the mobile app
 
 Requirements: Node.js 20+, and either the **Expo Go** app (Android) on your
@@ -128,38 +115,7 @@ Scan the QR code with Expo Go (or press `a` for an emulator). Then:
 Troubleshooting: the phone and computer must be on the same network and the
 firewall must allow port 8000; the backend must be started with
 `--host 0.0.0.0`. Type-check with `cd mobile && npx tsc --noEmit`.
-<!-- mobile:end -->
 
-<!-- web:start -->
-## 2. Run the website
-
-Requirements: Node.js 20+.
-
-```bash
-cd web
-npm install
-cp .env.example .env        # set VITE_API_URL if your backend is not on http://localhost:8000
-npm run dev                 # http://localhost:5173
-```
-
-Open <http://localhost:5173>: landing page → **Get started** → create an account
-→ dashboard. Use **Add** to upload a receipt or bank statement image (drag and
-drop works), review it, and save.
-
-Production build and local preview:
-
-```bash
-npm run build               # type-checks, then writes dist/
-npm run preview             # serves dist/ at http://localhost:4173
-```
-
-`dist/` is a static site (hash-routed, so no server rewrites are needed): host it
-on Netlify, Vercel, GitHub Pages or any static host. Set `VITE_API_URL` to your
-public backend URL **when building**, and set `CORS_ALLOW_ORIGINS` on the backend
-to the site's address.
-
-Tests: `npm test` · Type-check: `npm run typecheck`.
-<!-- web:end -->
 
 ---
 
@@ -169,9 +125,6 @@ Tests: `npm test` · Type-check: `npm run typecheck`.
 cd backend && python -m unittest discover -s tests -p "test_*.py" -t tests
 ```
 
-<!-- web:start -->
-Website: `cd web && npm test`.
-<!-- web:end -->
 
 ---
 
@@ -181,12 +134,7 @@ Website: `cd web && npm test`.
 backend/        FastAPI backend: routes/, services/, parsers/, schemas/, prompts/, tests/
 supabase/       SQL migrations
 docs/           Architecture, API contract and decision records (ADRs)
-<!-- mobile:start -->
 mobile/         Expo / React Native app
-<!-- mobile:end -->
-<!-- web:start -->
-web/            React + Vite website
-<!-- web:end -->
 ```
 
 Documentation: [`docs/api-contract.md`](docs/api-contract.md) ·
@@ -217,10 +165,6 @@ Work added on top of that base:
   expenses, **date-range filtering** and **pagination** (ADR-0012).
 - **Mobile redesign** — design system, motion, haptics, scan-type picker,
   statement review.
-<!-- web:start -->
-- **The website** — landing page and a full web app (dashboard, transactions,
-  upload and review, budgets, insights, assistant).
-<!-- web:end -->
 
 ---
 

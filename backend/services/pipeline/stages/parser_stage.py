@@ -5,6 +5,31 @@ from services.pipeline.pipeline_result import PipelineResult
 from services.parsers.parser_registry import ParserRegistry
 
 
+def parser_failure(parsed, stage_name: str = "parser") -> PipelineResult | None:
+    """Turn a parser's own ``status="error"`` into a real HTTP error.
+
+    Without this a missing OpenAI key or a model failure looked like a successful
+    scan with every field blank. 503 = the AI is not configured, 502 = it failed.
+    """
+    if getattr(parsed, "status", None) != "error":
+        return None
+    message = str(getattr(parsed, "message", "") or "The document could not be read.")
+    not_configured = "not configured" in message
+    return PipelineResult.fail(
+        stage_name,
+        errors=[message],
+        payload={
+            "error": "AI reading is not configured" if not_configured else "The document could not be read",
+            "message": (
+                "The server has no OpenAI API key, so documents cannot be read yet. Add OPENAI_API_KEY to the backend's .env."
+                if not_configured
+                else "The AI service could not read this document. Please try again."
+            ),
+        },
+        http_status_code=503 if not_configured else 502,
+    )
+
+
 class ParserStage:
     """
     Dispatches parser work by document type.
@@ -41,6 +66,9 @@ class ParserStage:
             context.filename,
             context.content_type,
         )
+        failure = parser_failure(parsed, self.name)
+        if failure is not None:
+            return failure
         parsed = registration.normalize(parsed)
         context.parser_output = parsed
         context.legacy_receipt_output = registration.to_legacy_response(parsed)

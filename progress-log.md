@@ -251,3 +251,12 @@
   multi-file/PDF upload, invoice review, editable statement dates.
 - Fixed: the root `.gitignore` ignored `web/src/lib/`, so it was never committed.
 - 210 backend tests, 12 website tests.
+
+## A Database That Works Out of the Box
+
+- SQLite store as the default database (Supabase still supported), `.env` loader,
+  auto-generated local JWT secret, `seed_demo.py`, and clear 503/502 errors when
+  the AI cannot read a document (ADR-0015). Verified by running the real server
+  with no configuration: sign-up, sign-in, saved records, insights and budgets.
+- README setup reduced to: install, set `OPENAI_API_KEY`, run.
+- 234 backend tests.

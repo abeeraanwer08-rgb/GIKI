@@ -157,5 +157,30 @@ class InvoicePipelineAndSaveTests(unittest.TestCase):
             app.dependency_overrides.clear()
 
 
+class ParserFailureTests(unittest.TestCase):
+    """A parser that could not read the document must be an error, not a blank review."""
+
+    def run_pipeline(self, message: str):
+        class Failing(InvoiceParser):
+            async def process_bytes(self, b, f, c):
+                return invoice(status="error", message=message, lines=[], vendor_name=None, total_amount=None)
+
+        image = np.full((1600, 1200, 3), 245, np.uint8)
+        for i in range(40):
+            cv2.putText(image, f"Line {i} 1,234.00", (40, 60 + i * 34), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (20, 20, 20), 1)
+        ctx = PipelineContext(cv2.imencode(".png", image)[1].tobytes(), "i.png", "image/png", document_type_hint="invoice")
+        return asyncio.run(FinancialPipeline(invoice_parser=Failing()).process(ctx))
+
+    def test_a_missing_openai_key_is_a_clear_503(self):
+        result = self.run_pipeline("OPENAI_API_KEY is not configured on the server.")
+        self.assertFalse(result.success)
+        self.assertEqual(result.http_status_code, 503)
+        self.assertIn("OPENAI_API_KEY", result.payload["message"])
+
+    def test_any_other_model_failure_is_a_502(self):
+        result = self.run_pipeline("AI returned an invalid response. Please try again.")
+        self.assertEqual((result.success, result.http_status_code), (False, 502))
+
+
 if __name__ == "__main__":
     unittest.main()

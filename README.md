@@ -47,32 +47,32 @@ and narrates the computed figures (ADR-0009, ADR-0010).
 
 ## What you need before running
 
-The AI features need three things, all configured on the **backend** only:
+**Only one thing is required: an OpenAI API key** — it is what reads receipts,
+statements and invoices and writes the AI summaries (platform.openai.com; paid,
+and the only part that costs money). Everything else works out of the box:
 
-| What | Env variable(s) | Where to get it |
+| What | Needed? | Details |
 |---|---|---|
-| OpenAI API key | `OPENAI_API_KEY` | platform.openai.com (paid; the only part that costs money) |
-| Supabase project | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | supabase.com (free tier is enough) |
-| Login-token secret | `AUTH_JWT_SECRET` | make one up: `python -c "import secrets; print(secrets.token_urlsafe(48))"` |
-| Email sending (optional in development) | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM` | any SMTP provider (Gmail app password, SendGrid, Brevo, Resend, ...) |
+| **OpenAI API key** (`OPENAI_API_KEY`) | **Yes**, for scanning and AI text | Without it you can still sign in, browse, and use budgets and charts; scanning returns "AI reading is not configured". |
+| **Database** | **No** — built in | Data is stored in a local SQLite file, `backend/data/hissabai.db`, created automatically. Optionally use Supabase instead (below). |
+| **Login-token secret** (`AUTH_JWT_SECRET`) | No | A random one is generated and kept in `backend/data/jwt_secret`. Set your own when you deploy. |
+| **Email sending** (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM`) | No in development | Without it, verification and reset codes are printed in the backend console. Real deployments need an SMTP provider (Gmail app password, SendGrid, Brevo, Resend, ...). |
 
-**Email in development:** with `SMTP_HOST` empty, the 6-digit verification and
-reset codes are printed in the backend's console instead of being emailed, so you
-can sign up and test everything without a mail account. To skip verification
-entirely while developing, set `REQUIRE_EMAIL_VERIFICATION=false`. Real
-deployments must configure SMTP.
+Settings go in a `.env` file in the project root (copy `.env.example`); the
+backend reads it automatically. Never put keys in the mobile app or the website,
+and never commit `.env` or `backend/data/`.
 
-Never put these keys in the mobile app or the website, and never commit them.
+**Which database?** SQLite is the default and is ideal for a demo, a single server
+and a few thousand records. Set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`
+(or `STORAGE_BACKEND=supabase`) to use hosted Postgres instead; then open the
+Supabase SQL editor and run the files in `supabase/migrations/` **in order**:
+`20260811000000_create_financial_records.sql`, `20260923000000_create_budgets.sql`,
+`20260924000000_add_users_and_ownership.sql`, `20261002000000_auth_hardening.sql`.
+The data is not copied between the two databases.
 
-**Supabase setup:** open your project's SQL editor and run the files in
-`supabase/migrations/` **in order**:
-
-1. `20260811000000_create_financial_records.sql`
-2. `20260923000000_create_budgets.sql`
-3. `20260924000000_add_users_and_ownership.sql` (users + per-user ownership;
-   rows saved before this migration have no owner and are not shown)
-4. `20261002000000_auth_hardening.sql` (email verification, reset codes, session
-   revocation; existing accounts are treated as already verified)
+**Email in development:** with `SMTP_HOST` empty, codes appear in the backend's
+console, so you can sign up and test everything without a mail account. To skip
+verification entirely while developing, set `REQUIRE_EMAIL_VERIFICATION=false`.
 
 ---
 
@@ -81,15 +81,18 @@ Never put these keys in the mobile app or the website, and never commit them.
 Requirements: Python 3.11+.
 
 ```bash
-cp .env.example .env              # then fill in the values from the table above
 python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install fastapi httpx openai opencv-python-headless pymupdf pyjwt python-multipart uvicorn
 # (or, with uv:  uv sync)
 
-set -a && source .env && set +a   # load the variables into your shell
+cp .env.example .env              # then edit .env and set OPENAI_API_KEY=sk-...
 cd backend
+python seed_demo.py               # optional: demo account + 3 months of sample spending
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
+
+`seed_demo.py` creates **demo@hissabai.app / DemoPass123** (already verified) with
+75 categorised expenses and four budgets, so every screen has data immediately.
 
 Check it: `curl http://localhost:8000/health` → `{"status":"ok"}`.
 Interactive API docs: <http://localhost:8000/docs>.
@@ -147,7 +150,8 @@ Website: `cd web && npm test`.
 
 ```
 backend/        FastAPI backend: routes/, services/, parsers/, schemas/, prompts/, tests/
-supabase/       SQL migrations
+                (data/ holds the SQLite database; seed_demo.py adds sample data)
+supabase/       SQL migrations (only needed if you choose Supabase)
 docs/           Architecture, API contract and decision records (ADRs)
 web/            React + Vite website
 ```
@@ -191,6 +195,8 @@ Work added on top of that base:
 
 ## Known limitations
 
+- SQLite (the default database) suits a demo, one server and a few thousand
+  records; use Supabase for anything larger. Data is not copied between them.
 - Rate-limit counters live in the backend process, which is right for a single
   worker; with several workers each keeps its own counts (swap
   `services/rate_limit.py` for Redis or the database before scaling out).

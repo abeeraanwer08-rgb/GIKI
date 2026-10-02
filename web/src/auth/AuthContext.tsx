@@ -1,8 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { api, setUnauthorizedHandler, tokenStore } from '../api/client';
+import { api, setUnauthorizedHandler, setUnverifiedHandler, tokenStore } from '../api/client';
 import type { User } from '../api/types';
 
-type Status = 'loading' | 'signedOut' | 'signedIn';
+type Status = 'loading' | 'signedOut' | 'unverified' | 'signedIn';
 
 type AuthValue = {
   status: Status;
@@ -10,9 +10,14 @@ type AuthValue = {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (name: string, email: string, password: string) => Promise<void>;
   signOut: () => void;
+  /** Confirms the emailed code; on success the app opens. */
+  verifyEmail: (code: string) => Promise<void>;
+  resendVerification: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthValue | null>(null);
+
+const statusFor = (user: User): Status => (user.email_verified === false ? 'unverified' : 'signedIn');
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<Status>(() => (tokenStore.get() ? 'loading' : 'signedOut'));
@@ -27,13 +32,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Restore a saved session; an expired or revoked token just returns to the sign-in page.
   useEffect(() => {
     setUnauthorizedHandler(signOut);
-    if (!tokenStore.get()) return () => setUnauthorizedHandler(null);
+    setUnverifiedHandler(() => setStatus((s) => (s === 'signedIn' ? 'unverified' : s)));
+    if (!tokenStore.get()) {
+      return () => {
+        setUnauthorizedHandler(null);
+        setUnverifiedHandler(null);
+      };
+    }
     let cancelled = false;
     api.me().then(
       (me) => {
         if (cancelled) return;
         setUser(me);
-        setStatus('signedIn');
+        setStatus(statusFor(me));
       },
       () => {
         if (!cancelled) signOut();
@@ -42,13 +53,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
       setUnauthorizedHandler(null);
+      setUnverifiedHandler(null);
     };
   }, [signOut]);
 
   const finish = useCallback((token: string, me: User) => {
     tokenStore.set(token);
     setUser(me);
-    setStatus('signedIn');
+    setStatus(statusFor(me));
   }, []);
 
   const value = useMemo<AuthValue>(
@@ -64,6 +76,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         finish(token, me);
       },
       signOut,
+      verifyEmail: async (code) => {
+        const me = await api.verifyEmail(code);
+        setUser(me);
+        setStatus('signedIn');
+      },
+      resendVerification: async () => {
+        await api.resendVerification();
+      },
     }),
     [status, user, finish, signOut],
   );

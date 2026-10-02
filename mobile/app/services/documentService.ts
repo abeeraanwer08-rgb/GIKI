@@ -133,6 +133,7 @@ function getUploadMimeType(uri: string): string {
     bmp: 'image/bmp',
     tif: 'image/tiff',
     tiff: 'image/tiff',
+    pdf: 'application/pdf',
   };
   return (extension && mimeTypes[extension]) || 'image/jpeg';
 }
@@ -161,13 +162,27 @@ function uploadErrorFor(status: number, body: unknown): UploadError {
     return new UploadError(status, 'That file type isn’t supported. Use a JPEG or PNG photo.', true);
   }
   if (status === 422) {
+    const d = (body as { detail?: { error?: string; message?: string } } | null)?.detail;
+    if (d?.error === 'Unusable PDF' && d.message) return new UploadError(status, d.message, true);
+    if (d?.error === 'multi_page_unsupported') {
+      return new UploadError(
+        status,
+        'Several pages are only supported for bank statements and invoices. Choose the type, or send one page.',
+        true,
+      );
+    }
+    if (d?.error === 'Too many pages') {
+      return new UploadError(status, 'That’s too many pages. The limit is 12 per document.', true);
+    }
     return new UploadError(status, 'That document type isn’t supported. Choose a different type and try again.', false);
   }
   if (status === 400 && detail?.status === 'unsupported_document') {
     return new UploadError(status, 'This doesn’t look like a receipt, bill or wallet screenshot.', true);
   }
   if (status === 400) {
-    return new UploadError(status, 'The photo is too blurry or dark to read. Try again in better light.', true);
+    const page = (body as { detail?: { page?: number } } | null)?.detail?.page;
+    const where = page ? `Page ${page} is` : 'The photo is';
+    return new UploadError(status, `${where} too blurry, dark or small to read. Try again in better light.`, true);
   }
   return new UploadError(status, 'Something went wrong on our side. Please try again in a moment.', false);
 }
@@ -176,20 +191,22 @@ export async function uploadDocument(
   imageUris: string[],
   documentType?: ScanDocumentType,
 ): Promise<UniversalFinancialRecord> {
-  const imageUri = imageUris[0];
-  if (!imageUri) {
-    throw new UploadError(null, 'No document image was selected.', true);
+  if (imageUris.length === 0) {
+    throw new UploadError(null, 'No document was selected.', true);
   }
 
+  // Every page is sent as a repeated "file" field, in order.
   const formData = new FormData();
-  formData.append(
-    'file',
-    {
-      uri: imageUri,
-      name: getUploadFileName(imageUri),
-      type: getUploadMimeType(imageUri),
-    } as unknown as Blob,
-  );
+  for (const uri of imageUris) {
+    formData.append(
+      'file',
+      {
+        uri,
+        name: getUploadFileName(uri),
+        type: getUploadMimeType(uri),
+      } as unknown as Blob,
+    );
+  }
   // Only send an explicit choice; omitting it lets the server classify the image.
   if (documentType && documentType !== 'auto') {
     formData.append('document_type', documentType);

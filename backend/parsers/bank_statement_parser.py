@@ -86,7 +86,9 @@ def _inherit_dates(transactions: list[BankTransaction]) -> None:
     for txn in transactions:
         if txn.date:
             last_date = txn.date
-        elif last_date:
+        elif last_date and not txn.date_text:
+            # Only a row that printed no date at all inherits one. A printed date we
+            # could not read stays blank (and is flagged) rather than being replaced.
             txn.date, txn.date_inferred = last_date, True
 
 
@@ -184,9 +186,17 @@ class BankStatementParser:
                 return None
             return round(sum(values), 2) if len(values) > 1 else values[0]
 
+        starts = [p.period_start for p in pages if p.period_start]
+        ends = [p.period_end for p in pages if p.period_end]
+        period_start, period_end = (min(starts) if starts else None), (max(ends) if ends else None)
+
         transactions: list[BankTransaction] = []
         for page in pages:
             rows = [t.model_copy() for t in page.transactions]
+            # A printed "15 Sep" on page 2 can only be placed once page 1's period is known.
+            for row in rows:
+                if not row.date and row.date_text:
+                    row.date = parse_statement_date(row.date_text, period_start=period_start, period_end=period_end)
             if transactions and rows:
                 prev, head = transactions[-1], rows[0]
                 repeated = (
@@ -199,8 +209,6 @@ class BankStatementParser:
             transactions.extend(rows)
         _inherit_dates(transactions)
 
-        starts = [p.period_start for p in pages if p.period_start]
-        ends = [p.period_end for p in pages if p.period_end]
         base = pages[0]
         return BankStatementAnalysisResponse(
             status="analysed",
@@ -211,8 +219,8 @@ class BankStatementParser:
             bank_name=first("bank_name"),
             account_last4=first("account_last4"),
             currency=first("currency"),
-            period_start=min(starts) if starts else None,
-            period_end=max(ends) if ends else None,
+            period_start=period_start,
+            period_end=period_end,
             opening_balance=first("opening_balance"),
             closing_balance=last("closing_balance"),
             stated_total_debits=printed_total("stated_total_debits"),
@@ -386,6 +394,7 @@ class BankStatementParser:
             transactions.append(
                 BankTransaction(
                     date=row_date,
+                    date_text=printed,
                     description=description,
                     debit=debit,
                     credit=credit,

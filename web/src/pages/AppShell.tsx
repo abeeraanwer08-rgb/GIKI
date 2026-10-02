@@ -18,6 +18,7 @@ export default function AppShell() {
     return <div style={{ display: 'grid', placeItems: 'center', minHeight: '100vh' }}><Spinner /></div>;
   }
   if (status === 'signedOut') return <Navigate to="/signin" replace />;
+  if (status === 'unverified') return <Navigate to="/verify" replace />;
 
   return (
     <div className="shell">

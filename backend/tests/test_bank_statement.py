@@ -84,8 +84,9 @@ class ParserCoercionTests(unittest.TestCase):
         self.assertEqual(len(result.transactions), 2)
         first, second = result.transactions
         self.assertEqual((first.debit, first.credit), (1250.0, None))
-        # An unreadable date inherits the previous row's date, flagged for the user to check.
-        self.assertEqual((second.date, second.date_inferred, second.credit), ("2026-09-03", True, 300.0))
+        # A printed date that cannot be read stays blank (and is flagged on review);
+        # it is never silently replaced by a neighbouring row's date.
+        self.assertEqual((second.date, second.date_inferred, second.credit), (None, False, 300.0))
 
     def test_non_object_response_gives_an_empty_statement(self):
         self.assertEqual(self.build(["nope"]).transactions, [])

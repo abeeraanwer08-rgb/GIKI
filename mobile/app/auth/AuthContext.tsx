@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { AuthError, fetchMe, logIn, signUp } from './authApi';
+import { AuthError, fetchMe, logIn, resendVerification, signUp, verifyEmail } from './authApi';
 import {
   Session,
   SessionUser,
@@ -10,7 +10,7 @@ import {
   setUnauthorizedHandler,
 } from './session';
 
-type Status = 'loading' | 'signedOut' | 'signedIn';
+type Status = 'loading' | 'signedOut' | 'unverified' | 'signedIn';
 
 interface AuthContextValue {
   status: Status;
@@ -18,6 +18,9 @@ interface AuthContextValue {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (name: string, email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  /** Confirms the emailed code; on success the app opens. */
+  verifyEmail: (code: string) => Promise<void>;
+  resendVerification: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -25,16 +28,22 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<Status>('loading');
   const [user, setUser] = useState<SessionUser | null>(null);
+  const [token, setCurrentToken] = useState<string | null>(null);
+
+  // Sessions saved before verification existed carry no flag: treat them as verified.
+  const statusFor = (u: SessionUser): Status => (u.email_verified === false ? 'unverified' : 'signedIn');
 
   const apply = useCallback(async (session: Session) => {
     setToken(session.token);
+    setCurrentToken(session.token);
     await saveSession(session);
     setUser(session.user);
-    setStatus('signedIn');
+    setStatus(statusFor(session.user));
   }, []);
 
   const signOut = useCallback(async () => {
     setToken(null);
+    setCurrentToken(null);
     await clearSession();
     setUser(null);
     setStatus('signedOut');
@@ -52,10 +61,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       // Show the app immediately, then confirm the token is still valid.
       setToken(saved.token);
+      setCurrentToken(saved.token);
       setUser(saved.user);
-      setStatus('signedIn');
+      setStatus(statusFor(saved.user));
       try {
-        await fetchMe(saved.token);
+        const fresh = await fetchMe(saved.token);
+        if (!cancelled && fresh.email_verified !== saved.user.email_verified) {
+          setUser(fresh);
+          setStatus(statusFor(fresh));
+          await saveSession({ token: saved.token, user: fresh });
+        }
       } catch (error) {
         // Only an explicit rejection signs out; being offline must not lock the user out.
         if (!cancelled && error instanceof AuthError && error.status === 401) await signOut();
@@ -81,8 +96,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signIn: async (email, password) => apply(await logIn(email, password)),
       signUp: async (name, email, password) => apply(await signUp(name, email, password)),
       signOut,
+      verifyEmail: async (code) => {
+        if (!token) throw new AuthError('Please sign in again.', 401);
+        const verified = await verifyEmail(token, code);
+        await saveSession({ token, user: verified });
+        setUser(verified);
+        setStatus('signedIn');
+      },
+      resendVerification: async () => {
+        if (!token) throw new AuthError('Please sign in again.', 401);
+        await resendVerification(token);
+      },
     }),
-    [status, user, apply, signOut],
+    [status, user, token, apply, signOut],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

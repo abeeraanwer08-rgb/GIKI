@@ -20,12 +20,12 @@ import {
   QualityIssue,
 } from '../utils/imageQuality';
 import Txt from '../ui/Txt';
-import { pickReceiptFromGallery } from '../utils/pickReceipt';
+import { pickPhotosFromGallery } from '../utils/pickReceipt';
 import Button from '../ui/Button';
 import IconBadge from '../ui/IconBadge';
 import EmptyState from '../ui/EmptyState';
 import FocusStatusBar from '../ui/FocusStatusBar';
-import { ScanDocumentType, scanTypeLabel } from '../utils/scanType';
+import { MULTI_PAGE_TYPES, ScanDocumentType, scanTypeLabel } from '../utils/scanType';
 import { colors, radius, spacing } from '../ui/theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Camera'>;
@@ -46,6 +46,8 @@ export default function CameraScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const documentType: ScanDocumentType | undefined = route.params?.documentType;
   const isStatement = documentType === 'bank_statement';
+  const existingImages = route.params?.existingImages ?? [];
+  const multiPage = !!documentType && MULTI_PAGE_TYPES.includes(documentType);
   const cameraRef = useRef<CameraView>(null);
   const [capturing, setCapturing] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
@@ -108,13 +110,13 @@ export default function CameraScreen({ navigation, route }: Props) {
     const { uri } = pendingCapture;
     setPendingCapture(null);
     setQualityIssues([]);
-    navigation.navigate('ReceiptPreview', { capturedImages: [uri], documentType });
+    navigation.navigate('ReceiptPreview', { capturedImages: [...existingImages, uri], documentType });
   };
 
   // ── Choose an existing photo instead of capturing ───────────────────────
   const handleGallery = async () => {
-    const uri = await pickReceiptFromGallery();
-    if (uri) navigation.navigate('ReceiptPreview', { capturedImages: [uri], documentType });
+    const uris = await pickPhotosFromGallery(multiPage);
+    if (uris.length) navigation.navigate('ReceiptPreview', { capturedImages: [...existingImages, ...uris], documentType });
   };
 
   // ── Capture ──────────────────────────────────────────────────────────────
@@ -149,7 +151,7 @@ export default function CameraScreen({ navigation, route }: Props) {
       }
 
       // No quality issues (or base64 unavailable) → proceed directly.
-      navigation.navigate('ReceiptPreview', { capturedImages: [photo.uri], documentType });
+      navigation.navigate('ReceiptPreview', { capturedImages: [...existingImages, photo.uri], documentType });
     } catch (err) {
       console.error('[Camera] takePictureAsync failed:', err);
     } finally {

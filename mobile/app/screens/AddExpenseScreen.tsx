@@ -3,8 +3,8 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/AppNavigator';
-import { pickReceiptFromGallery } from '../utils/pickReceipt';
-import { SCAN_TYPES, ScanDocumentType } from '../utils/scanType';
+import { pickPdfOrImageFile, pickPhotosFromGallery } from '../utils/pickReceipt';
+import { MULTI_PAGE_TYPES, SCAN_TYPES, ScanDocumentType } from '../utils/scanType';
 import { haptics } from '../ui/haptics';
 import Txt from '../ui/Txt';
 import Card from '../ui/Card';
@@ -31,8 +31,17 @@ export default function AddExpenseScreen({ navigation }: Props) {
   const selected = SCAN_TYPES.find((t) => t.key === documentType) ?? SCAN_TYPES[0];
   const isStatement = documentType === 'bank_statement';
 
+  const multiPage = MULTI_PAGE_TYPES.includes(documentType);
+  // A PDF is offered wherever it can make sense: statements, invoices, and auto-detect.
+  const offersPdf = multiPage || documentType === 'auto';
+
   const chooseFromGallery = async () => {
-    const uri = await pickReceiptFromGallery();
+    const uris = await pickPhotosFromGallery(multiPage);
+    if (uris.length) navigation.navigate('ReceiptPreview', { capturedImages: uris, documentType });
+  };
+
+  const choosePdf = async () => {
+    const uri = await pickPdfOrImageFile();
     if (uri) navigation.navigate('ReceiptPreview', { capturedImages: [uri], documentType });
   };
 
@@ -85,7 +94,7 @@ export default function AddExpenseScreen({ navigation }: Props) {
           <IconBadge icon="scan" color={colors.primary} tint={colors.primarySoft} size={52} />
           <View style={styles.optionText}>
             <View style={styles.titleRow}>
-              <Txt variant="heading">{isStatement ? 'Scan statement' : 'Scan document'}</Txt>
+              <Txt variant="heading">{isStatement ? 'Scan statement' : documentType === 'invoice' ? 'Scan invoice' : 'Scan document'}</Txt>
               <View style={styles.aiChip}>
                 <Txt variant="overline" color={colors.primary} style={styles.chipText}>
                   AI
@@ -94,8 +103,10 @@ export default function AddExpenseScreen({ navigation }: Props) {
             </View>
             <Txt variant="caption" color={colors.inkSecondary}>
               {isStatement
-                ? 'Photograph a bank statement page'
-                : 'Receipts, bank statements, bills and wallet screenshots'}
+                ? 'Photograph each page of the statement'
+                : documentType === 'invoice'
+                  ? 'Photograph each page of the invoice'
+                  : 'Receipts, statements, invoices, bills and wallet screenshots'}
             </Txt>
           </View>
           <Ionicons name="chevron-forward" size={20} color={colors.primary} />
@@ -108,12 +119,27 @@ export default function AddExpenseScreen({ navigation }: Props) {
           <View style={styles.optionText}>
             <Txt variant="heading">Choose from gallery</Txt>
             <Txt variant="caption" color={colors.inkSecondary}>
-              Use a photo you already have
+              {multiPage ? 'Pick one or more photos' : 'Use a photo you already have'}
             </Txt>
           </View>
           <Ionicons name="chevron-forward" size={20} color={colors.inkMuted} />
         </Card>
       </Pressable>
+
+      {offersPdf && (
+        <Pressable onPress={choosePdf} style={({ pressed }) => [pressed && styles.pressed]}>
+          <Card style={styles.option}>
+            <IconBadge icon="document-attach" color={colors.warning} tint={colors.warningSoft} size={52} />
+            <View style={styles.optionText}>
+              <Txt variant="heading">Upload a PDF</Txt>
+              <Txt variant="caption" color={colors.inkSecondary}>
+                Statements and invoices, any number of pages
+              </Txt>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.inkMuted} />
+          </Card>
+        </Pressable>
+      )}
 
       <Card style={[styles.option, styles.optionDisabled]}>
         <IconBadge icon="create-outline" color={colors.inkMuted} tint={colors.surfaceMuted} size={52} />

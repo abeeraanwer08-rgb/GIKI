@@ -83,5 +83,26 @@ class ParserDateTests(unittest.TestCase):
         self.assertEqual([t.description for t in result.transactions], ["A"])
 
 
+class MultiPageDateTests(unittest.TestCase):
+    parser = BankStatementParser()
+
+    def page(self, raw):
+        return self.parser._build_response(META, raw)
+
+    def test_a_year_less_date_on_a_later_page_uses_the_period_printed_on_the_first(self):
+        first = self.page({"period_start": "01/09/2026", "period_end": "30/09/2026", "transactions": [{"date_text": "03 Sep", "description": "A", "debit": 1}]})
+        later = self.page({"transactions": [{"date_text": "15 Sep", "description": "B", "debit": 2}, {"description": "C", "debit": 3}]})
+        self.assertIsNone(later.transactions[0].date)  # unreadable on its own, but not overwritten
+        self.assertFalse(later.transactions[0].date_inferred)
+        merged = BankStatementParser.merge_pages([first, later])
+        self.assertEqual([t.date for t in merged.transactions], ["2026-09-03", "2026-09-15", "2026-09-15"])
+        self.assertEqual([t.date_inferred for t in merged.transactions], [False, False, True])
+
+    def test_a_printed_date_that_cannot_be_read_is_never_replaced_by_a_neighbours(self):
+        page = self.page({"transactions": [{"date_text": "05/09/2026", "description": "A", "debit": 1}, {"date_text": "garbled", "description": "B", "debit": 2}]})
+        self.assertIsNone(page.transactions[1].date)
+        self.assertTrue(any("1 transaction had no readable date" in w for w in self.parser.validate(page).warnings))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -22,13 +22,20 @@ share one **FastAPI backend**.
 
 ## What it does
 
-- **Accounts** — sign up / sign in; every user sees only their own data.
-- **Scan documents** — receipts, **bank statements**, utility bills and
-  EasyPaisa / JazzCash screenshots. Take a photo or upload an image.
+- **Accounts** — sign up / sign in with **email verification**, **password
+  reset** by emailed code and **login rate limiting**; every user sees only
+  their own data.
+- **Scan documents** — receipts, **bank statements**, **invoices**, utility
+  bills and EasyPaisa / JazzCash screenshots. Take a photo, upload an image, or
+  upload a **PDF** — statements and invoices can span up to 12 pages.
 - **Bank statements, row by row** — each spending transaction becomes its own
   expense with its own category; printed totals and running balances are
   cross-checked before saving; saving the same statement twice never
-  double-counts.
+  double-counts. Printed dates in any common format (`05/09/2026`, `05-Sep`) are
+  read in code, with the year taken from the statement period; rows with no
+  printed date are flagged and their date can be edited.
+- **Invoices** — vendor, invoice number, dates, line items, tax, discount and
+  shipping are extracted and the line, subtotal and total maths is checked.
 - **Review before saving** — correct anything the AI got wrong; totals are
   validated.
 - **Budgets** — a monthly limit per category with on-track / warning / over
@@ -53,6 +60,13 @@ The AI features need three things, all configured on the **backend** only:
 | OpenAI API key | `OPENAI_API_KEY` | platform.openai.com (paid; the only part that costs money) |
 | Supabase project | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | supabase.com (free tier is enough) |
 | Login-token secret | `AUTH_JWT_SECRET` | make one up: `python -c "import secrets; print(secrets.token_urlsafe(48))"` |
+| Email sending (optional in development) | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM` | any SMTP provider (Gmail app password, SendGrid, Brevo, Resend, ...) |
+
+**Email in development:** with `SMTP_HOST` empty, the 6-digit verification and
+reset codes are printed in the backend's console instead of being emailed, so you
+can sign up and test everything without a mail account. To skip verification
+entirely while developing, set `REQUIRE_EMAIL_VERIFICATION=false`. Real
+deployments must configure SMTP.
 
 Never put these keys in the mobile app or the website, and never commit them.
 
@@ -63,6 +77,8 @@ Never put these keys in the mobile app or the website, and never commit them.
 2. `20260923000000_create_budgets.sql`
 3. `20260924000000_add_users_and_ownership.sql` (users + per-user ownership;
    rows saved before this migration have no owner and are not shown)
+4. `20261002000000_auth_hardening.sql` (email verification, reset codes, session
+   revocation; existing accounts are treated as already verified)
 
 ---
 
@@ -73,7 +89,7 @@ Requirements: Python 3.11+.
 ```bash
 cp .env.example .env              # then fill in the values from the table above
 python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
-pip install fastapi httpx openai opencv-python-headless pyjwt python-multipart uvicorn
+pip install fastapi httpx openai opencv-python-headless pymupdf pyjwt python-multipart uvicorn
 # (or, with uv:  uv sync)
 
 set -a && source .env && set +a   # load the variables into your shell
@@ -119,10 +135,14 @@ $env:EXPO_PUBLIC_API_URL="http://192.168.1.20:8000"; npx expo start
 
 Scan the QR code with Expo Go (or press `a` for an emulator). Then:
 
-1. **Create account** on the first screen.
-2. Tap **＋** → choose what you are adding (Receipt, Bank statement, …) →
-   **Scan** with the camera or **Choose from gallery**.
-3. Check the extracted details, edit anything wrong, **Save**.
+1. **Create account** on the first screen, then enter the 6-digit code from the
+   verification email (in development it is printed in the backend console).
+   *Forgot password?* on the sign-in screen resets it the same way.
+2. Tap **＋** → choose what you are adding (Receipt, Bank statement, Invoice, …) →
+   **Scan** with the camera, **Choose from gallery**, or **Upload a PDF**. For
+   statements and invoices use **Add another page** to build a multi-page document.
+3. Check the extracted details, edit anything wrong (including a statement row's
+   date), **Save**.
 4. Explore Home, Budgets, Insights and the Assistant tabs.
 
 Troubleshooting: the phone and computer must be on the same network and the
@@ -143,8 +163,10 @@ npm run dev                 # http://localhost:5173
 ```
 
 Open <http://localhost:5173>: landing page → **Get started** → create an account
-→ dashboard. Use **Add** to upload a receipt or bank statement image (drag and
-drop works), review it, and save.
+→ enter the emailed 6-digit code (in development it is printed in the backend
+console) → dashboard. Use **Add** to upload a receipt, invoice or bank statement —
+an image, several page images, or a PDF (drag and drop works) — review it, and
+save. **Forgot password?** on the sign-in page resets it by emailed code.
 
 Production build and local preview:
 
@@ -215,6 +237,10 @@ Work added on top of that base:
   protected and scoped (ADR-0011).
 - **Bank statement parsing** with deterministic balance checks and per-row
   expenses, **date-range filtering** and **pagination** (ADR-0012).
+- **Auth hardening** — emailed-code email verification and password reset,
+  session revocation, login/sign-up/reset rate limiting (ADR-0013).
+- **Multi-page PDFs and photos, invoices, a vision-model document classifier and
+  robust statement dates** (ADR-0014).
 - **Mobile redesign** — design system, motion, haptics, scan-type picker,
   statement review.
 <!-- web:start -->
@@ -226,8 +252,18 @@ Work added on top of that base:
 
 ## Known limitations
 
-- No password reset, email verification or login rate limiting yet.
-- Bank statements are read one page at a time; multi-page PDFs are not supported.
-- Invoice parsing is not implemented (the classifier does not detect invoices).
-- Statement dates must be fully readable (`YYYY-MM-DD`) to be kept; unreadable
-  dates are left blank rather than guessed.
+- Rate-limit counters live in the backend process, which is right for a single
+  worker; with several workers each keeps its own counts (swap
+  `services/rate_limit.py` for Redis or the database before scaling out).
+- No two-factor authentication, and email delivery depends on your SMTP provider.
+- Statements and invoices are limited to 12 pages and 10 MB per file (25 MB
+  total). PDFs are rendered to images and read visually; password-protected PDFs
+  are refused.
+- The vision-model classifier adds one small extra call to an auto-detected
+  upload. A mostly-white page photographed *without* choosing "Bank statement" or
+  "Invoice" may be rejected as overexposed, because receipts are judged more
+  strictly; choosing the type fixes it.
+- A statement date that is printed but unreadable stays blank (and is flagged)
+  rather than being guessed; undated rows take the previous row's date and are
+  flagged for you to check.
+- Saved expenses cannot yet be edited or deleted from the apps.

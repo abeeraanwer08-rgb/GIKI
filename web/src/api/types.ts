@@ -1,4 +1,4 @@
-export interface User { id: string; name: string; email: string }
+export interface User { id: string; name: string; email: string; email_verified?: boolean }
 export interface AuthResponse { token: string; user: User }
 
 export interface RecordSummary {
@@ -42,7 +42,7 @@ export interface BudgetStatus { category: string; monthly_limit: number; spent: 
 export interface BudgetOverview { month: string; currency: string; total_limit: number; total_spent: number; alerts: number; budgets: BudgetStatus[] }
 
 // ── Upload / review ──────────────────────────────────────────────────────────
-export type ScanType = 'auto' | 'receipt' | 'bank_statement' | 'utility_bill' | 'wallet_screenshot';
+export type ScanType = 'auto' | 'receipt' | 'invoice' | 'bank_statement' | 'utility_bill' | 'wallet_screenshot';
 
 export interface ReviewItem {
   description: string;

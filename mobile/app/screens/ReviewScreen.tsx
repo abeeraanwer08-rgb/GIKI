@@ -172,6 +172,15 @@ export default function ReviewScreen({ route, navigation }: Props) {
   }, [uploadedUfr]);
 
   const isStatement = (ufr?.documentType ?? uploadedUfr.documentType) === 'bank_statement';
+  const isInvoice = (ufr?.documentType ?? uploadedUfr.documentType) === 'invoice';
+
+  const updateItemDate = (index: number, text: string) => {
+    setEditedItems((prev) =>
+      prev.map((item, i) =>
+        i === index ? { ...item, metadata: { ...(item.metadata ?? {}), date: text, date_inferred: undefined } } : item,
+      ),
+    );
+  };
 
   // A statement's total is always the sum of the rows kept, so dropping or
   // correcting a row can never leave the total out of step with them.
@@ -364,14 +373,14 @@ export default function ReviewScreen({ route, navigation }: Props) {
         <SectionHeader title="Details" subtitle="Tap any field to correct it" />
         <Card>
           <Field
-            label={isStatement ? 'Bank' : 'Merchant'}
-            icon={isStatement ? 'business-outline' : 'storefront-outline'}
+            label={isStatement ? 'Bank' : isInvoice ? 'Vendor' : 'Merchant'}
+            icon={isStatement ? 'business-outline' : isInvoice ? 'briefcase-outline' : 'storefront-outline'}
             value={editedMerchant}
             onChangeText={setEditedMerchant}
-            placeholder={isStatement ? 'Bank name' : 'Store name'}
+            placeholder={isStatement ? 'Bank name' : isInvoice ? 'Vendor name' : 'Store name'}
           />
           <Field
-            label={isStatement ? 'Statement end date' : 'Date'}
+            label={isStatement ? 'Statement end date' : isInvoice ? 'Invoice date' : 'Date'}
             icon="calendar-outline"
             value={editedDate}
             onChangeText={setEditedDate}
@@ -379,7 +388,7 @@ export default function ReviewScreen({ route, navigation }: Props) {
           />
           <View style={styles.lastField}>
             <Field
-              label={isStatement ? 'Total spent' : 'Total paid'}
+              label={isStatement ? 'Total spent' : isInvoice ? 'Invoice total' : 'Total paid'}
               icon="cash-outline"
               value={editedTotal}
               onChangeText={isStatement ? () => {} : setEditedTotal}
@@ -460,10 +469,30 @@ export default function ReviewScreen({ route, navigation }: Props) {
                   amount={item.amount}
                   onChangeName={(text) => updateItemName(index, text)}
                   onChangeAmount={(text) => updateItemAmount(index, text)}
-                  caption={isStatement ? statementCaption(item) : undefined}
+                  date={isStatement ? statementDate(item) : undefined}
+                  onChangeDate={isStatement ? (text) => updateItemDate(index, text) : undefined}
+                  dateAssumed={isStatement && item.metadata?.date_inferred === true}
                   onRemove={isStatement && editedItems.length > 1 ? () => removeItem(index) : undefined}
                 />
               ))}
+            </Card>
+          </>
+        )}
+
+        {isInvoice && ufr?.details && (
+          <>
+            <SectionHeader title="Invoice details" />
+            <Card>
+              {ufr.details.invoice_number ? (
+                <SummaryRow label="Invoice no." value={String(ufr.details.invoice_number)} />
+              ) : null}
+              {ufr.details.due_date ? <SummaryRow label="Due date" value={String(ufr.details.due_date)} /> : null}
+              {ufr.details.payment_terms ? (
+                <SummaryRow label="Terms" value={String(ufr.details.payment_terms)} />
+              ) : null}
+              {ufr.details.vendor_tax_id ? (
+                <SummaryRow label="Vendor NTN/STRN" value={String(ufr.details.vendor_tax_id)} />
+              ) : null}
             </Card>
           </>
         )}
@@ -539,10 +568,10 @@ export default function ReviewScreen({ route, navigation }: Props) {
   );
 }
 
-/** Small caption under a statement row: its date and the date-less fallback. */
-function statementCaption(item: UFRItem): string | undefined {
+/** A statement row's date as editable text ('' when none was read). */
+function statementDate(item: UFRItem): string {
   const date = item.metadata?.date;
-  return typeof date === 'string' && date ? date : undefined;
+  return typeof date === 'string' ? date : '';
 }
 
 const styles = StyleSheet.create({

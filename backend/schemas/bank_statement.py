@@ -14,6 +14,9 @@ class BankTransaction(BaseModel):
     credit: Optional[float] = None  # money in
     balance: Optional[float] = None  # running balance after the row, if printed
     reference: Optional[str] = None
+    # The date exactly as printed, kept so it can be re-read once the statement
+    # period is known (it may only be printed on another page).
+    date_text: Optional[str] = None
     # True when the row printed no date and was given the previous row's date.
     date_inferred: bool = False
 

@@ -260,3 +260,7 @@
   with no configuration: sign-up, sign-in, saved records, insights and budgets.
 - README setup reduced to: install, set `OPENAI_API_KEY`, run.
 - 234 backend tests.
+
+## README and Screenshots
+
+- README rewritten: screenshots, quick start, how it works, full settings table, API overview, troubleshooting and limitations. Screenshots live in `docs/screenshots/` (website pages and two phone montages), captured from a running copy with the demo account.

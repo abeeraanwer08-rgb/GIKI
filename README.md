@@ -1,16 +1,35 @@
 # HissabAI
 
 **HissabAI** (*hisaab*, حساب — "accounts") is an AI-powered personal finance
-copilot for Pakistan. Scan a receipt, bank statement, utility bill or wallet
-screenshot; HissabAI reads it, categorises every expense, tracks it against your
-budgets, forecasts your month, flags unusual spending, and answers questions
-about your money in English, Urdu or Roman Urdu.
+copilot for Pakistan. Photograph or upload a receipt, bank statement, invoice,
+utility bill or wallet screenshot; HissabAI reads it, files every expense under
+the right category, tracks it against your budgets, forecasts your month, flags
+unusual spending, and answers questions about your money in English, Urdu or
+Roman Urdu.
 
 It ships as a **mobile app** (Expo / React Native) and a **website** (React) that
-share one **FastAPI backend**.
+share one **FastAPI backend** with a built-in database — no accounts to create
+except an OpenAI key.
 
 > **This branch (`mobile-app`)** contains the backend and the complete mobile app.
 > The website lives on the `website` branch.
+
+---
+
+## Screenshots
+
+> Captured from a running copy with the demo account (`seed_demo.py`). They were
+> taken without an OpenAI key, so the AI-written text (summaries, assistant
+> replies) and the document-reading step shown here are stand-in answers; the
+> numbers, charts, budgets and review screens are the real application.
+
+### Mobile app
+
+![Home, budgets, insights and the assistant](docs/screenshots/mobile-overview.png)
+
+**Adding a document, reviewing a bank statement, saving, and email verification:**
+
+![Add a PDF, review the statement, saved confirmation, verify email](docs/screenshots/mobile-documents-and-accounts.png)
 
 ---
 
@@ -40,8 +59,61 @@ share one **FastAPI backend**.
   use only your own numbers.
 - **History** — paginated transaction list with date-range and category filters.
 
-All numbers are computed deterministically in code; the LLM only reads receipts
-and narrates the computed figures (ADR-0009, ADR-0010).
+All numbers are computed deterministically in code; the AI only reads documents
+and narrates figures that were already computed (ADR-0009, ADR-0010).
+
+---
+
+## How it works
+
+```mermaid
+flowchart LR
+    A["Mobile app / Website"] -->|"JSON + Bearer token"| B["FastAPI backend"]
+    B --> C[("SQLite file<br/>or Supabase")]
+    B -->|"page images"| D["OpenAI vision"]
+    B -->|"6-digit codes"| E["Email (SMTP)"]
+```
+
+Uploading a document runs this pipeline on the backend:
+
+1. **Check the file** — type, size (10 MB each, 25 MB total), PDFs rendered to
+   page images (up to 12 pages).
+2. **Classify** — your choice wins; otherwise image heuristics, double-checked by
+   a small vision call when unsure.
+3. **Quality check** every page (blur, brightness, resolution).
+4. **Read** each page with the vision model, in parallel, and merge the pages.
+5. **Verify in code** — totals, running balances, line maths, dates; mismatches
+   become review warnings. The AI never computes a total.
+6. **Review** on your phone or in the browser, then **save**. Statements are stored
+   one expense per spending row, duplicate-safe.
+
+---
+
+## Quick start
+
+You need **Python 3.11+**, **Node.js 20+**, and an **OpenAI API key** (the only
+thing that costs money; without it you can still browse the demo data, budgets
+and charts, but scanning and the AI text will say "AI reading is not configured").
+
+```bash
+# 1. Backend
+python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
+pip install fastapi httpx openai opencv-python-headless pymupdf pyjwt python-multipart uvicorn
+cp .env.example .env                  # edit .env: set OPENAI_API_KEY=sk-...
+cd backend
+python seed_demo.py                   # optional demo data
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+```bash
+# 2. Mobile app (new terminal)
+cd mobile && npm install
+EXPO_PUBLIC_API_URL=http://<your-computer-IP>:8000 npx expo start      # scan the QR code with Expo Go
+```
+
+Sign in with the demo account **demo@hissabai.app / DemoPass123**, or create your
+own (the verification code is printed in the backend console in development).
+Full details are in the sections below.
 
 ---
 
@@ -73,6 +145,21 @@ The data is not copied between the two databases.
 **Email in development:** with `SMTP_HOST` empty, codes appear in the backend's
 console, so you can sign up and test everything without a mail account. To skip
 verification entirely while developing, set `REQUIRE_EMAIL_VERIFICATION=false`.
+
+### All settings
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `OPENAI_API_KEY` | — | Reads documents; writes insights and assistant answers |
+| `HISSABAI_DB_PATH` | `backend/data/hissabai.db` | Where the SQLite file lives |
+| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | — | Use Supabase instead of SQLite (service-role key stays on the server) |
+| `STORAGE_BACKEND` | auto | `sqlite` or `supabase` (auto = Supabase only if `SUPABASE_URL` is set) |
+| `AUTH_JWT_SECRET` | generated | Signs login tokens (≥ 32 characters); set your own in production |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM` | — | Real email for codes (port 465 = SSL, otherwise STARTTLS) |
+| `REQUIRE_EMAIL_VERIFICATION` | `true` | `false` only for local development |
+| `CORS_ALLOW_ORIGINS` | local dev ports | Website origins allowed to call the API |
+| `TRUST_PROXY_HEADERS` | off | `true` behind your own reverse proxy so rate limits see real client IPs |
+| `AI_CLASSIFIER` | on | `off` disables the extra vision call that identifies document types |
 
 ---
 
@@ -135,10 +222,25 @@ Scan the QR code with Expo Go (or press `a` for an emulator). Then:
    date), **Save**.
 4. Explore Home, Budgets, Insights and the Assistant tabs.
 
-Troubleshooting: the phone and computer must be on the same network and the
-firewall must allow port 8000; the backend must be started with
-`--host 0.0.0.0`. Type-check with `cd mobile && npx tsc --noEmit`.
+Type-check with `cd mobile && npx tsc --noEmit`.
 
+
+---
+
+## API overview
+
+All endpoints are under `/api/v1` and (except `/health`, sign-up, sign-in and
+password reset) need `Authorization: Bearer <token>` from an email-verified
+account. Full request/response details are in [`docs/api-contract.md`](docs/api-contract.md)
+and, with the backend running, at <http://localhost:8000/docs>.
+
+| Area | Endpoints |
+|---|---|
+| Auth | `POST /auth/signup` · `/auth/login` · `GET /auth/me` · `POST /auth/verify-email` · `/auth/resend-verification` · `/auth/forgot-password` · `/auth/reset-password` |
+| Documents | `POST /receipt/upload` (image(s) or PDF, optional `document_type`) |
+| Expenses | `GET /financial-records` (paging, `start_date`, `end_date`, `category`) · `POST /financial-records` |
+| Insights | `GET /insights` · `GET /insights/summary` (no AI) · `POST /insights/ask` — all accept `start_date` / `end_date` |
+| Budgets | `GET /budgets` · `PUT /budgets/{category}` · `DELETE /budgets/{category}` |
 
 ---
 
@@ -148,6 +250,23 @@ firewall must allow port 8000; the backend must be started with
 cd backend && python -m unittest discover -s tests -p "test_*.py" -t tests
 ```
 
+The backend suite covers the parsers and their maths checks, PDF and multi-page
+handling, both database stores (including a full run of the real app on a real
+SQLite file), login, verification, reset and rate limiting.
+
+
+---
+
+## Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| Scanning says "The server has no OpenAI API key" | Add `OPENAI_API_KEY=sk-...` to `.env` and restart the backend. |
+| "Check your email" but no email arrives | Without `SMTP_HOST` the code is printed in the backend console. For real email, set the SMTP variables. |
+| Everyone was signed out after a restart | `AUTH_JWT_SECRET` changed or the generated secret file was wiped; set a fixed `AUTH_JWT_SECRET`. |
+| "Too many sign-in attempts" | 5 wrong passwords lock an email for 15 minutes; wait, or reset the password. |
+| The phone cannot reach the backend | Same Wi-Fi, firewall open for port 8000, backend started with `--host 0.0.0.0`, and `EXPO_PUBLIC_API_URL` set to your computer's LAN IP (not `localhost`). |
+| A white page photo is rejected as overexposed | Choose "Bank statement" or "Invoice" before scanning; receipts are judged more strictly. |
 
 ---
 
@@ -157,7 +276,7 @@ cd backend && python -m unittest discover -s tests -p "test_*.py" -t tests
 backend/        FastAPI backend: routes/, services/, parsers/, schemas/, prompts/, tests/
                 (data/ holds the SQLite database; seed_demo.py adds sample data)
 supabase/       SQL migrations (only needed if you choose Supabase)
-docs/           Architecture, API contract and decision records (ADRs)
+docs/           Architecture, API contract, decision records (ADRs), screenshots
 mobile/         Expo / React Native app
 ```
 
@@ -191,6 +310,8 @@ Work added on top of that base:
   session revocation, login/sign-up/reset rate limiting (ADR-0013).
 - **Multi-page PDFs and photos, invoices, a vision-model document classifier and
   robust statement dates** (ADR-0014).
+- **A built-in SQLite database, `.env` loading and demo data** so the project runs
+  without external services (ADR-0015).
 - **Mobile redesign** — design system, motion, haptics, scan-type picker,
   statement review.
 
@@ -198,6 +319,9 @@ Work added on top of that base:
 
 ## Known limitations
 
+- Document reading was developed against stand-in AI responses; its accuracy on
+  real Pakistani receipts and statements depends on the OpenAI model and should be
+  checked with your own documents before relying on it.
 - SQLite (the default database) suits a demo, one server and a few thousand
   records; use Supabase for anything larger. Data is not copied between them.
 - Rate-limit counters live in the backend process, which is right for a single
@@ -215,3 +339,4 @@ Work added on top of that base:
   rather than being guessed; undated rows take the previous row's date and are
   flagged for you to check.
 - Saved expenses cannot yet be edited or deleted from the apps.
+- The mobile app has been run in a browser preview but not yet on a physical phone.

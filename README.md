@@ -9,14 +9,8 @@ about your money in English, Urdu or Roman Urdu.
 It ships as a **mobile app** (Expo / React Native) and a **website** (React) that
 share one **FastAPI backend**.
 
-<!-- mobile:start -->
-> **This branch (`mobile-app`)** contains the backend and the complete mobile app.
-> The website lives on the `website` branch.
-<!-- mobile:end -->
-<!-- web:start -->
 > **This branch (`website`)** contains the backend and the complete website.
 > The mobile app lives on the `mobile-app` branch.
-<!-- web:end -->
 
 ---
 
@@ -84,53 +78,12 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 Check it: `curl http://localhost:8000/health` → `{"status":"ok"}`.
 Interactive API docs: <http://localhost:8000/docs>.
 
-<!-- web:start -->
 The website runs in a browser, so the backend must allow its address. The
 defaults allow the local dev server (`http://localhost:5173`) and `vite preview`
 (`http://localhost:4173`). For a deployed site set
 `CORS_ALLOW_ORIGINS=https://your-site.example.com` before starting the backend.
-<!-- web:end -->
 
-<!-- mobile:start -->
-## 2. Run the mobile app
 
-Requirements: Node.js 20+, and either the **Expo Go** app (Android) on your
-phone or an Android emulator.
-
-```bash
-cd mobile
-npm install
-```
-
-Tell the app where your backend is with `EXPO_PUBLIC_API_URL`, then start it:
-
-| Where the app runs | Value of `EXPO_PUBLIC_API_URL` |
-|---|---|
-| **Physical phone** (same Wi-Fi as your computer) | `http://<your-computer's-LAN-IP>:8000` e.g. `http://192.168.1.20:8000` |
-| **Android emulator** | nothing needed (defaults to `http://10.0.2.2:8000`) |
-
-```bash
-# macOS / Linux
-EXPO_PUBLIC_API_URL=http://192.168.1.20:8000 npx expo start
-
-# Windows PowerShell
-$env:EXPO_PUBLIC_API_URL="http://192.168.1.20:8000"; npx expo start
-```
-
-Scan the QR code with Expo Go (or press `a` for an emulator). Then:
-
-1. **Create account** on the first screen.
-2. Tap **＋** → choose what you are adding (Receipt, Bank statement, …) →
-   **Scan** with the camera or **Choose from gallery**.
-3. Check the extracted details, edit anything wrong, **Save**.
-4. Explore Home, Budgets, Insights and the Assistant tabs.
-
-Troubleshooting: the phone and computer must be on the same network and the
-firewall must allow port 8000; the backend must be started with
-`--host 0.0.0.0`. Type-check with `cd mobile && npx tsc --noEmit`.
-<!-- mobile:end -->
-
-<!-- web:start -->
 ## 2. Run the website
 
 Requirements: Node.js 20+.
@@ -159,7 +112,6 @@ public backend URL **when building**, and set `CORS_ALLOW_ORIGINS` on the backen
 to the site's address.
 
 Tests: `npm test` · Type-check: `npm run typecheck`.
-<!-- web:end -->
 
 ---
 
@@ -169,9 +121,7 @@ Tests: `npm test` · Type-check: `npm run typecheck`.
 cd backend && python -m unittest discover -s tests -p "test_*.py" -t tests
 ```
 
-<!-- web:start -->
 Website: `cd web && npm test`.
-<!-- web:end -->
 
 ---
 
@@ -181,12 +131,7 @@ Website: `cd web && npm test`.
 backend/        FastAPI backend: routes/, services/, parsers/, schemas/, prompts/, tests/
 supabase/       SQL migrations
 docs/           Architecture, API contract and decision records (ADRs)
-<!-- mobile:start -->
-mobile/         Expo / React Native app
-<!-- mobile:end -->
-<!-- web:start -->
 web/            React + Vite website
-<!-- web:end -->
 ```
 
 Documentation: [`docs/api-contract.md`](docs/api-contract.md) ·
@@ -217,10 +162,8 @@ Work added on top of that base:
   expenses, **date-range filtering** and **pagination** (ADR-0012).
 - **Mobile redesign** — design system, motion, haptics, scan-type picker,
   statement review.
-<!-- web:start -->
 - **The website** — landing page and a full web app (dashboard, transactions,
   upload and review, budgets, insights, assistant).
-<!-- web:end -->
 
 ---
 

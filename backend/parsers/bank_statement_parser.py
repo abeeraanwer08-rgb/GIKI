@@ -79,6 +79,17 @@ def mask_account_number(value: Any) -> str | None:
     return digits[-4:] if len(digits) >= 4 else None
 
 
+def _inherit_dates(transactions: list[BankTransaction]) -> None:
+    """Many statements print the date only on the first row of each day. Give an
+    undated row the previous row's date, but say so, so the user can check it."""
+    last_date: str | None = None
+    for txn in transactions:
+        if txn.date:
+            last_date = txn.date
+        elif last_date:
+            txn.date, txn.date_inferred = last_date, True
+
+
 class BankStatementParser:
     """Extract structured bank statement data from an image."""
 
@@ -143,6 +154,71 @@ class BankStatementParser:
             return failure("AI returned an invalid response. Please try again.")
 
         return self._build_response(base_meta, data)
+
+    # ── Multi-page ────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def merge_pages(pages: list[BankStatementAnalysisResponse]) -> BankStatementAnalysisResponse:
+        """Combine per-page results into one statement.
+
+        Header fields come from the first page that has them; the closing balance
+        from the last. Printed totals are taken from the last page that prints one,
+        or summed when several pages print one (per-page subtotals). A row repeated
+        at the top of the next page with the same running balance is dropped.
+        """
+        if len(pages) == 1:
+            return pages[0]
+        failed = next((p for p in pages if p.status != "analysed"), None)
+        if failed:
+            return failed
+
+        def first(name: str):
+            return next((getattr(p, name) for p in pages if getattr(p, name) is not None), None)
+
+        def last(name: str):
+            return next((getattr(p, name) for p in reversed(pages) if getattr(p, name) is not None), None)
+
+        def printed_total(name: str) -> float | None:
+            values = [getattr(p, name) for p in pages if getattr(p, name) is not None]
+            if not values:
+                return None
+            return round(sum(values), 2) if len(values) > 1 else values[0]
+
+        transactions: list[BankTransaction] = []
+        for page in pages:
+            rows = [t.model_copy() for t in page.transactions]
+            if transactions and rows:
+                prev, head = transactions[-1], rows[0]
+                repeated = (
+                    head.balance is not None
+                    and (prev.date, prev.description, prev.debit, prev.credit, prev.balance)
+                    == (head.date, head.description, head.debit, head.credit, head.balance)
+                )
+                if repeated:
+                    rows = rows[1:]
+            transactions.extend(rows)
+        _inherit_dates(transactions)
+
+        starts = [p.period_start for p in pages if p.period_start]
+        ends = [p.period_end for p in pages if p.period_end]
+        base = pages[0]
+        return BankStatementAnalysisResponse(
+            status="analysed",
+            filename=base.filename,
+            content_type=base.content_type,
+            size_bytes=sum(p.size_bytes for p in pages),
+            message=f"Bank statement analysed successfully ({len(pages)} pages).",
+            bank_name=first("bank_name"),
+            account_last4=first("account_last4"),
+            currency=first("currency"),
+            period_start=min(starts) if starts else None,
+            period_end=max(ends) if ends else None,
+            opening_balance=first("opening_balance"),
+            closing_balance=last("closing_balance"),
+            stated_total_debits=printed_total("stated_total_debits"),
+            stated_total_credits=printed_total("stated_total_credits"),
+            transactions=transactions,
+        )
 
     # ── Deterministic checks ──────────────────────────────────────────────────
 
@@ -318,14 +394,7 @@ class BankStatementParser:
                 )
             )
 
-        # Many statements print the date only on the first row of each day. Give an
-        # undated row the previous row's date, but say so, so the user can check it.
-        last_date: str | None = None
-        for txn in transactions:
-            if txn.date:
-                last_date = txn.date
-            elif last_date:
-                txn.date, txn.date_inferred = last_date, True
+        _inherit_dates(transactions)
 
         return BankStatementAnalysisResponse(
             **base_meta,

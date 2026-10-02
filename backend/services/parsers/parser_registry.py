@@ -45,6 +45,8 @@ class ParserRegistration:
     parser: ParserService
     normalize: ParserNormalizer
     to_legacy_response: LegacyResponseAdapter
+    # Present only for document types that can span several pages.
+    merge_pages: Callable[[list[Any]], Any] | None = None
 
 
 class ParserRegistry:
@@ -96,11 +98,13 @@ class ParserRegistry:
             "bank_statement",
             bank_statement_parser,
             to_legacy_response=bank_statement_parser.to_legacy_receipt_response,
+            merge_pages=bank_statement_parser.merge_pages,
         )
         self.register(
             "invoice",
             invoice_parser,
             to_legacy_response=invoice_parser.to_legacy_receipt_response,
+            merge_pages=invoice_parser.merge_pages,
         )
 
     def register(
@@ -110,6 +114,7 @@ class ParserRegistry:
         *,
         normalize: ParserNormalizer | None = None,
         to_legacy_response: LegacyResponseAdapter | None = None,
+        merge_pages: Callable[[list[Any]], Any] | None = None,
     ) -> None:
         """
         Register or replace one document parser.
@@ -125,6 +130,7 @@ class ParserRegistry:
             parser=parser,
             normalize=normalize or (lambda output: output),
             to_legacy_response=to_legacy_response or self._default_legacy_response,
+            merge_pages=merge_pages,
         )
 
     def get_parser(self, document_type: str) -> Optional[ParserService]:

@@ -310,6 +310,48 @@ class SupabaseClient:
         ).json()
         return rows[0] if rows else None
 
+    def get_user_by_id(self, user_id: str) -> dict[str, Any] | None:
+        rows = self.request(
+            "GET", f"/rest/v1/users?select=*&id=eq.{quote(user_id, safe='')}&limit=1"
+        ).json()
+        return rows[0] if rows else None
+
+    def update_user(self, user_id: str, patch: dict[str, Any]) -> dict[str, Any] | None:
+        rows = self.request(
+            "PATCH",
+            f"/rest/v1/users?id=eq.{quote(user_id, safe='')}",
+            json=patch,
+            headers={"Prefer": "return=representation"},
+        ).json()
+        return rows[0] if rows else None
+
+    def insert_auth_code(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return self.request(
+            "POST", "/rest/v1/auth_codes", json=payload, headers={"Prefer": "return=representation"}
+        ).json()[0]
+
+    def get_active_auth_code(self, user_id: str, purpose: str) -> dict[str, Any] | None:
+        """The newest code for this user and purpose that has not been used up."""
+        rows = self.request(
+            "GET",
+            "/rest/v1/auth_codes?select=*"
+            f"&user_id=eq.{quote(user_id, safe='')}&purpose=eq.{quote(purpose, safe='')}"
+            "&consumed_at=is.null&order=created_at.desc&limit=1",
+        ).json()
+        return rows[0] if rows else None
+
+    def update_auth_code(self, code_id: str, patch: dict[str, Any]) -> None:
+        self.request("PATCH", f"/rest/v1/auth_codes?id=eq.{quote(code_id, safe='')}", json=patch)
+
+    def consume_auth_codes(self, user_id: str, purpose: str, when: str) -> None:
+        """Retire every unused code of a purpose (a new code replaces older ones)."""
+        self.request(
+            "PATCH",
+            f"/rest/v1/auth_codes?user_id=eq.{quote(user_id, safe='')}"
+            f"&purpose=eq.{quote(purpose, safe='')}&consumed_at=is.null",
+            json={"consumed_at": when},
+        )
+
     def close(self) -> None:
         """Release the underlying HTTP client."""
         self._http.close()

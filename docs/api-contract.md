@@ -99,13 +99,28 @@ unavailable.
 
 ### GET /api/v1/financial-records
 
-Lists saved financial records, most recent first, shaped for the mobile
-Home screen's transaction list.
+Lists the signed-in user's saved records, most recent first, one page at a time.
+
+**Query parameters (all optional)**
+
+| Name | Meaning |
+|---|---|
+| `limit` | Page size, 1–200 (default 50) |
+| `offset` | Records to skip (default 0) |
+| `start_date`, `end_date` | Inclusive `YYYY-MM-DD` bounds on `transaction_date` |
+| `category` | Only this category (e.g. `groceries`) |
+
+`start_date` after `end_date`, a malformed date, or an out-of-range
+`limit`/`offset` → HTTP 422.
 
 **Response — HTTP 200**
 
 ```json
 {
+  "total": 133,
+  "limit": 50,
+  "offset": 0,
+  "has_more": true,
   "records": [
     {
       "id": "receipt-2026-08-12-001",
@@ -120,7 +135,46 @@ Home screen's transaction list.
 }
 ```
 
+`total` counts every record matching the filters, across all pages.
 Returns HTTP 503 when persistence is unavailable.
+
+---
+
+### Date ranges on insights
+
+`GET /api/v1/insights`, `GET /api/v1/insights/summary` and
+`POST /api/v1/insights/ask` accept optional inclusive `start_date` and
+`end_date` (`YYYY-MM-DD`) query parameters. Every record in the range is used
+(there is no longer a 500-record cap). The summary echoes `start_date` /
+`end_date`, and `current_month` (the forecast) is `null` when the range does not
+include today. An inverted range → HTTP 422.
+
+---
+
+### POST /api/v1/receipt/upload — `document_type`
+
+`multipart/form-data` with `file` and an optional `document_type` field:
+`receipt`, `bank_statement`, `utility_bill`, `wallet_screenshot` or `auto`
+(default). An explicit type skips the heuristic classifier; an unknown value →
+HTTP 422. Bank statements are best sent with `document_type=bank_statement`.
+
+For a statement the response is the usual review shape with:
+
+- `extracted_items` — one per **debit** row (`description`, `amount`,
+  `category`, `metadata.date`, `metadata.balance`, `metadata.reference`);
+  credits are not spending and are summarised instead.
+- `editable_fields.merchant` = bank name, `purchase_date` = period end,
+  `total_amount` = sum of the debit rows, plus `period_start`, `period_end`,
+  `account_last4`.
+- `processing_metadata.details` — `opening_balance`, `closing_balance`,
+  `debit_count`, `credit_count`, `total_credits`.
+- `validation_warnings` — printed totals that do not match the rows, a broken
+  running balance, rows without an amount, missing header fields.
+
+Saving a `bank_statement` UFR (`POST /api/v1/financial-records`) stores **one
+record per debit row** (ids derived from the row's content) and returns
+`records_saved`. Rows already stored are skipped; if every row already exists →
+HTTP 409 (`Financial record already exists`).
 
 ---
 

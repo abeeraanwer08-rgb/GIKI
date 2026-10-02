@@ -220,3 +220,17 @@
   limit (413); scan failures give specific guidance and a retake-or-retry choice.
 - 18 new backend tests (84 total), including per-user isolation and anonymous
   access refusal on every data route.
+
+## Bank Statements, Date Ranges, Pagination and the Website
+
+- Bank statement parser with deterministic checks, per-row expenses on save,
+  duplicate-safe saving, explicit `document_type` on upload (ADR-0012).
+- Date-range filtering (`start_date` / `end_date`) on insights, summary, ask and
+  the records list; records list paginated; the 500-record cap is gone.
+- Mobile: scan-type picker, statement review (row removal, locked total,
+  summary), Load more on Home, Insights period selector, API URL via
+  `EXPO_PUBLIC_API_URL`.
+- Website (`web/`): landing page, auth, dashboard, transactions with filters and
+  paging, upload and review (incl. statements), budgets, insights, assistant.
+  CORS added to the backend for it.
+- 125 backend tests, 8 website tests.

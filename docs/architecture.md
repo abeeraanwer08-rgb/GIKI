@@ -6,7 +6,7 @@
 ## High-Level Data Flow
 
 ```
-Android Expo App
+Mobile app / Website
   → FastAPI Backend
     → OpenAI Multimodal AI
       → Structured JSON
@@ -21,7 +21,10 @@ Android Expo App
 
 | Component | Status |
 |---|---|
-| Android Expo App | Not implemented |
+| Mobile app (Expo / React Native) | ✅ Implemented |
+| Website (React + Vite) | ✅ Implemented |
+| Accounts and per-user data | ✅ scrypt + signed tokens, every route scoped |
+| Bank statement parsing | ✅ With deterministic balance checks |
 | FastAPI Backend | ✅ Implemented through ReviewResponse pipeline |
 | OpenAI Multimodal AI | ✅ Implemented for current parsers |
 | Structured JSON response parsing | ✅ Implemented |

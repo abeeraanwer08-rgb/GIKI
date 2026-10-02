@@ -1,10 +1,197 @@
 # HissabAI
 
 **HissabAI** (*hisaab*, حساب — "accounts") is an AI-powered personal finance
-copilot for Pakistan. Scan a receipt, bill or wallet screenshot; HissabAI reads
-it, categorises it, tracks it against your budgets, forecasts your month, flags
-unusual spending, and answers questions about your money in English, Urdu or
-Roman Urdu.
+copilot for Pakistan. Scan a receipt, bank statement, utility bill or wallet
+screenshot; HissabAI reads it, categorises every expense, tracks it against your
+budgets, forecasts your month, flags unusual spending, and answers questions
+about your money in English, Urdu or Roman Urdu.
+
+It ships as a **mobile app** (Expo / React Native) and a **website** (React) that
+share one **FastAPI backend**.
+
+<!-- mobile:start -->
+> **This branch (`mobile-app`)** contains the backend and the complete mobile app.
+> The website lives on the `website` branch.
+<!-- mobile:end -->
+<!-- web:start -->
+> **This branch (`website`)** contains the backend and the complete website.
+> The mobile app lives on the `mobile-app` branch.
+<!-- web:end -->
+
+---
+
+## What it does
+
+- **Accounts** — sign up / sign in; every user sees only their own data.
+- **Scan documents** — receipts, **bank statements**, utility bills and
+  EasyPaisa / JazzCash screenshots. Take a photo or upload an image.
+- **Bank statements, row by row** — each spending transaction becomes its own
+  expense with its own category; printed totals and running balances are
+  cross-checked before saving; saving the same statement twice never
+  double-counts.
+- **Review before saving** — correct anything the AI got wrong; totals are
+  validated.
+- **Budgets** — a monthly limit per category with on-track / warning / over
+  status.
+- **Insights** — spending by category and month, a month-end forecast, unusual
+  spending flags and AI-written summaries, for any date range.
+- **Bilingual assistant** — ask in English, Urdu script or Roman Urdu; answers
+  use only your own numbers.
+- **History** — paginated transaction list with date-range and category filters.
+
+All numbers are computed deterministically in code; the LLM only reads receipts
+and narrates the computed figures (ADR-0009, ADR-0010).
+
+---
+
+## What you need before running
+
+The AI features need three things, all configured on the **backend** only:
+
+| What | Env variable(s) | Where to get it |
+|---|---|---|
+| OpenAI API key | `OPENAI_API_KEY` | platform.openai.com (paid; the only part that costs money) |
+| Supabase project | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | supabase.com (free tier is enough) |
+| Login-token secret | `AUTH_JWT_SECRET` | make one up: `python -c "import secrets; print(secrets.token_urlsafe(48))"` |
+
+Never put these keys in the mobile app or the website, and never commit them.
+
+**Supabase setup:** open your project's SQL editor and run the files in
+`supabase/migrations/` **in order**:
+
+1. `20260811000000_create_financial_records.sql`
+2. `20260923000000_create_budgets.sql`
+3. `20260924000000_add_users_and_ownership.sql` (users + per-user ownership;
+   rows saved before this migration have no owner and are not shown)
+
+---
+
+## 1. Run the backend (required by both apps)
+
+Requirements: Python 3.11+.
+
+```bash
+cp .env.example .env              # then fill in the values from the table above
+python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
+pip install fastapi httpx openai opencv-python-headless pyjwt python-multipart uvicorn
+# (or, with uv:  uv sync)
+
+set -a && source .env && set +a   # load the variables into your shell
+cd backend
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+Check it: `curl http://localhost:8000/health` → `{"status":"ok"}`.
+Interactive API docs: <http://localhost:8000/docs>.
+
+<!-- web:start -->
+The website runs in a browser, so the backend must allow its address. The
+defaults allow the local dev server (`http://localhost:5173`) and `vite preview`
+(`http://localhost:4173`). For a deployed site set
+`CORS_ALLOW_ORIGINS=https://your-site.example.com` before starting the backend.
+<!-- web:end -->
+
+<!-- mobile:start -->
+## 2. Run the mobile app
+
+Requirements: Node.js 20+, and either the **Expo Go** app (Android) on your
+phone or an Android emulator.
+
+```bash
+cd mobile
+npm install
+```
+
+Tell the app where your backend is with `EXPO_PUBLIC_API_URL`, then start it:
+
+| Where the app runs | Value of `EXPO_PUBLIC_API_URL` |
+|---|---|
+| **Physical phone** (same Wi-Fi as your computer) | `http://<your-computer's-LAN-IP>:8000` e.g. `http://192.168.1.20:8000` |
+| **Android emulator** | nothing needed (defaults to `http://10.0.2.2:8000`) |
+
+```bash
+# macOS / Linux
+EXPO_PUBLIC_API_URL=http://192.168.1.20:8000 npx expo start
+
+# Windows PowerShell
+$env:EXPO_PUBLIC_API_URL="http://192.168.1.20:8000"; npx expo start
+```
+
+Scan the QR code with Expo Go (or press `a` for an emulator). Then:
+
+1. **Create account** on the first screen.
+2. Tap **＋** → choose what you are adding (Receipt, Bank statement, …) →
+   **Scan** with the camera or **Choose from gallery**.
+3. Check the extracted details, edit anything wrong, **Save**.
+4. Explore Home, Budgets, Insights and the Assistant tabs.
+
+Troubleshooting: the phone and computer must be on the same network and the
+firewall must allow port 8000; the backend must be started with
+`--host 0.0.0.0`. Type-check with `cd mobile && npx tsc --noEmit`.
+<!-- mobile:end -->
+
+<!-- web:start -->
+## 2. Run the website
+
+Requirements: Node.js 20+.
+
+```bash
+cd web
+npm install
+cp .env.example .env        # set VITE_API_URL if your backend is not on http://localhost:8000
+npm run dev                 # http://localhost:5173
+```
+
+Open <http://localhost:5173>: landing page → **Get started** → create an account
+→ dashboard. Use **Add** to upload a receipt or bank statement image (drag and
+drop works), review it, and save.
+
+Production build and local preview:
+
+```bash
+npm run build               # type-checks, then writes dist/
+npm run preview             # serves dist/ at http://localhost:4173
+```
+
+`dist/` is a static site (hash-routed, so no server rewrites are needed): host it
+on Netlify, Vercel, GitHub Pages or any static host. Set `VITE_API_URL` to your
+public backend URL **when building**, and set `CORS_ALLOW_ORIGINS` on the backend
+to the site's address.
+
+Tests: `npm test` · Type-check: `npm run typecheck`.
+<!-- web:end -->
+
+---
+
+## Tests
+
+```bash
+cd backend && python -m unittest discover -s tests -p "test_*.py" -t tests
+```
+
+<!-- web:start -->
+Website: `cd web && npm test`.
+<!-- web:end -->
+
+---
+
+## Repository layout
+
+```
+backend/        FastAPI backend: routes/, services/, parsers/, schemas/, prompts/, tests/
+supabase/       SQL migrations
+docs/           Architecture, API contract and decision records (ADRs)
+<!-- mobile:start -->
+mobile/         Expo / React Native app
+<!-- mobile:end -->
+<!-- web:start -->
+web/            React + Vite website
+<!-- web:end -->
+```
+
+Documentation: [`docs/api-contract.md`](docs/api-contract.md) ·
+[`docs/architecture.md`](docs/architecture.md) · [`docs/adr/`](docs/adr) ·
+[`progress-log.md`](progress-log.md).
 
 ---
 
@@ -17,145 +204,30 @@ review hints), Supabase persistence, and the original Expo mobile app (receipt
 capture, review and save flow). The original commit history is preserved in
 this repository.
 
-Work added on top of that base in this repository:
+Work added on top of that base:
 
-- **AI financial reasoning layer** — deterministic spending calculations plus
-  LLM-generated insights, recommendations and grounded Q&A
-  (`GET /api/v1/insights`, `POST /api/v1/insights/ask`, ADR-0009).
-- **Smart categorisation** — rule-based categoriser tuned for Pakistani
-  merchants (K-Electric, SNGPL, Imtiaz, Cheezious, Careem, Easypaisa…) applied
-  on save and to older uncategorised records, with a user override on the
-  Review screen (ADR-0010).
-- **Budgets** — monthly limit per category with on-track / warning / over
-  status and alerts (`/api/v1/budgets`, `budgets` table migration).
-- **Forecast & unusual-spending detection** — month-end projection from the
-  current pace, and flags for records at least 2× the category's usual amount
-  (`GET /api/v1/insights/summary`).
-- **Bilingual AI assistant** — full chat tab answering in English, Urdu script
-  or Roman Urdu, grounded in the user's own numbers.
-- **Saved-records API** — `GET /api/v1/financial-records` for the mobile app.
-- **Mobile design system & redesign** — theme tokens, Inter typography, shared
-  UI components, four-tab navigation (Home, Budgets, Insights, Assistant) with
-  a floating add button, donut chart, and a redesigned scan → review flow.
+- **AI financial reasoning layer** — deterministic calculations plus
+  LLM-generated insights, recommendations and grounded Q&A (ADR-0009).
+- **Smart categorisation, budgets, forecast and unusual-spending detection**
+  (ADR-0010).
+- **Bilingual AI assistant** (English, Urdu, Roman Urdu).
+- **Accounts and per-user data** — scrypt passwords, signed tokens, every route
+  protected and scoped (ADR-0011).
+- **Bank statement parsing** with deterministic balance checks and per-row
+  expenses, **date-range filtering** and **pagination** (ADR-0012).
+- **Mobile redesign** — design system, motion, haptics, scan-type picker,
+  statement review.
+<!-- web:start -->
+- **The website** — landing page and a full web app (dashboard, transactions,
+  upload and review, budgets, insights, assistant).
+<!-- web:end -->
 
 ---
 
-## Accounts and sign-in
+## Known limitations
 
-Every user has a private account. `POST /api/v1/auth/signup` and `/login` return
-a signed token that the mobile app keeps in the device's secure store; every
-data route requires it and only ever reads or writes the caller's own records
-and budgets. Passwords are hashed with scrypt, and login gives the same answer
-for a wrong password and an unknown email. See
-[`docs/adr/0011-accounts-and-per-user-data.md`](docs/adr/0011-accounts-and-per-user-data.md).
-
-Receipts can be scanned with the camera or imported from the photo library.
-Uploads over 10 MB are rejected, and failed scans explain whether retaking the
-photo will help.
-
-## Current Milestone: Budgets, Smart Categorisation and Bilingual Assistant
-
-Saved records are auto-categorised, tracked against monthly category budgets,
-projected to month end, and checked for unusual spending. A bilingual
-assistant answers questions grounded in those numbers. See
-[`docs/adr/0010-categorisation-budgets-and-forecasting.md`](docs/adr/0010-categorisation-budgets-and-forecasting.md)
-and
-[`docs/adr/0009-financial-insights-and-ai-reasoning.md`](docs/adr/0009-financial-insights-and-ai-reasoning.md).
-
----
-
-## Project Structure
-
-```
-backend/        # Python FastAPI backend
-  main.py       # Application entry point
-  routes/       # API route modules (future)
-  services/     # Business logic (future)
-  models/       # Data models (future)
-  schemas/      # Pydantic schemas (future)
-  utils/        # Utility helpers (future)
-docs/           # Architecture and API documentation
-mobile/         # Expo React Native Android app (future milestone)
-```
-
----
-
-## Running the Backend
-
-From the project root:
-
-```bash
-cd backend
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-```
-
----
-
-## Testing GET /health
-
-```bash
-curl http://localhost:8000/health
-```
-
-Expected response:
-
-```json
-{"status": "ok"}
-```
-
----
-
-## Testing the financial insights endpoints
-
-```bash
-curl http://localhost:8000/api/v1/insights
-
-curl -X POST http://localhost:8000/api/v1/insights/ask \
-  -H "Content-Type: application/json" \
-  -d '{"question": "What did I spend the most on?"}'
-```
-
-Both endpoints require `OPENAI_API_KEY`, `SUPABASE_URL`, and
-`SUPABASE_SERVICE_ROLE_KEY` to be configured server-side.
-
----
-
-## Interactive API Documentation
-
-Once the backend is running, open:
-
-- Swagger UI: `http://localhost:8000/docs`
-- ReDoc: `http://localhost:8000/redoc`
-
----
-
-## Supabase configuration
-
-The backend requires these server-side environment values:
-
-```text
-SUPABASE_URL
-SUPABASE_SERVICE_ROLE_KEY
-AUTH_JWT_SECRET   # at least 32 random characters, e.g. `openssl rand -hex 32`
-```
-
-Never expose `SUPABASE_SERVICE_ROLE_KEY` to Android or API clients. Apply the
-migrations in order:
-
-1. [`supabase/migrations/20260811000000_create_financial_records.sql`](supabase/migrations/20260811000000_create_financial_records.sql)
-2. [`supabase/migrations/20260923000000_create_budgets.sql`](supabase/migrations/20260923000000_create_budgets.sql)
-3. [`supabase/migrations/20260924000000_add_users_and_ownership.sql`](supabase/migrations/20260924000000_add_users_and_ownership.sql)
-   (adds `users` and per-user ownership; records and budgets saved before this
-   migration have no owner and are not shown to anyone)
-
-## What is NOT implemented yet
-
-- Authentication (all persisted/summarized records are currently shared,
-  not scoped per user)
-- Bank statement parsing (receipts, utility bills, and wallet screenshots
-  are supported)
-- Date-range filtering / pagination for insights (currently the most
-  recent 500 saved records)
-
-See [`docs/architecture.md`](docs/architecture.md) for the planned architecture  
-and [`docs/api-contract.md`](docs/api-contract.md) for future API contracts.
+- No password reset, email verification or login rate limiting yet.
+- Bank statements are read one page at a time; multi-page PDFs are not supported.
+- Invoice parsing is not implemented (the classifier does not detect invoices).
+- Statement dates must be fully readable (`YYYY-MM-DD`) to be kept; unreadable
+  dates are left blank rather than guessed.

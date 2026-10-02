@@ -366,15 +366,36 @@ class SupabaseClient:
         return url.rstrip("/")
 
 
-_client: SupabaseClient | None = None
+_client: Any = None
+
+
+def storage_backend() -> str:
+    """Which database is in use: ``supabase`` or ``sqlite``.
+
+    ``STORAGE_BACKEND`` forces one; otherwise Supabase is used when ``SUPABASE_URL``
+    is set and SQLite (a local file, no signup needed) when it is not.
+    """
+    forced = os.environ.get("STORAGE_BACKEND", "").strip().lower()
+    if forced in {"supabase", "sqlite"}:
+        return forced
+    return "supabase" if os.environ.get("SUPABASE_URL", "").strip() else "sqlite"
 
 
 def get_supabase_client() -> SupabaseClient:
-    """Return the process-level Supabase client, creating it only when needed."""
+    """Return the process-level database client, creating it only when needed.
+
+    The name is historical: this returns whichever store ``storage_backend()``
+    selects (both expose the same methods).
+    """
     global _client
     if _client is None:
-        _client = SupabaseClient.from_environment()
-    return _client
+        if storage_backend() == "sqlite":
+            from services.sqlite_store import SqliteStore
+
+            _client = SqliteStore.from_environment()
+        else:
+            _client = SupabaseClient.from_environment()
+    return _client  # type: ignore[return-value]
 
 
 def reset_supabase_client() -> None:

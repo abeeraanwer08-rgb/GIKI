@@ -11,7 +11,7 @@ from services.pipeline.pipeline_context import PipelineContext
 from services.pipeline.pipeline_result import PipelineResult
 from services.pipeline.stages.classifier_stage import ClassifierStage
 from services.pipeline.stages.confidence_stage import ConfidenceStage
-from services.pipeline.stages.parser_stage import ParserStage
+from services.pipeline.stages.parser_stage import ParserStage, parser_failure
 from services.pipeline.stages.quality_stage import QualityStage
 from services.pipeline.stages.review_hints_stage import ReviewHintsStage
 from services.pipeline.stages.ufr_stage import UFRStage
@@ -176,6 +176,9 @@ class FinancialPipeline:
 
         parsed = [registration.normalize(page) for page in await asyncio.gather(*(read(c) for c in contexts))]
         merged = registration.merge_pages(parsed)
+        failure = parser_failure(merged)
+        if failure is not None:
+            return failure
         context.parser_output = merged
         context.legacy_receipt_output = registration.to_legacy_response(merged)
         context.quality_report = self._merge_quality([c.quality_report for c in contexts])

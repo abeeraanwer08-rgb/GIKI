@@ -1,5 +1,11 @@
 import os
 
+# Must run before anything below reads the environment (several services build
+# their clients at import time).
+from env_loader import load_env_files
+
+load_env_files()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 

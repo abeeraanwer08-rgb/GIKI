@@ -51,7 +51,8 @@ function messageFor(status: number, detail: unknown): string {
   if (status === 401) return 'Your session has expired. Please sign in again.';
   if (status === 413) return 'That file is too large. Use files under 10 MB each (25 MB in total).';
   if (status === 415) return 'That file type isn’t supported. Use a JPEG, PNG or WebP image, or a PDF.';
-  if (status === 503) return 'The service is temporarily unavailable. Please try again shortly.';
+  const unavailable = (detail as { message?: string } | null)?.message;
+  if (status === 502 || status === 503) return unavailable ?? 'The service is temporarily unavailable. Please try again shortly.';
   const d = detail as { error?: string; message?: string; errors?: string[] } | { msg?: string }[] | string | null;
   if (typeof d === 'string') return d;
   // FastAPI validation errors arrive as a list: "Value error, Enter a valid email address."

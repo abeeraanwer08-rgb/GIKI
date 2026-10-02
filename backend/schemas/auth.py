@@ -39,8 +39,26 @@ class UserOut(BaseModel):
     id: str
     email: str
     name: str
+    email_verified: bool = True
 
 
 class AuthResponse(BaseModel):
     token: str
     user: UserOut
+
+
+class VerifyEmailRequest(BaseModel):
+    code: str = Field(min_length=4, max_length=12)
+
+
+class ForgotPasswordRequest(_EmailMixin):
+    pass
+
+
+class ResetPasswordRequest(_EmailMixin):
+    code: str = Field(min_length=4, max_length=12)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class MessageResponse(BaseModel):
+    message: str

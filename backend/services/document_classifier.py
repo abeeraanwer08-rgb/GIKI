@@ -10,8 +10,9 @@ documents).
 Supported document types
 ------------------------
     receipt           — point-of-sale receipt (supported by the full pipeline)
-    invoice           — formal business invoice (planned, not yet supported)
-    bank_statement    — printed/PDF bank statement page (planned)
+    invoice           — formal business invoice (found by the vision-model classifier
+                        or chosen by the user; the image heuristics cannot see it)
+    bank_statement    — printed/PDF bank statement page
     wallet_screenshot — mobile wallet / EasyPaisa / JazzCash screenshot
     utility_bill      — LESCO / SNGPL / WAPDA utility bill
     unknown           — cannot be classified with confidence

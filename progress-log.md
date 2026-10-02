@@ -234,3 +234,20 @@
   paging, upload and review (incl. statements), budgets, insights, assistant.
   CORS added to the backend for it.
 - 125 backend tests, 8 website tests.
+
+## Closing the Known Limitations
+
+- Auth hardening (ADR-0013): emailed 6-digit codes for email verification and
+  password reset, session revocation on reset, rate limiting on login, sign-up,
+  reset and code entry; SMTP or console mail; migration `20261002000000`.
+- Multi-page PDFs and photos for bank statements and invoices (ADR-0014), merged
+  across pages; per-page quality errors; PDF rendering with PyMuPDF.
+- Invoice parsing with deterministic maths checks, and a vision-model classifier
+  that finds invoices and statements automatically.
+- Robust statement dates: flexible parsing with the year from the period, flagged
+  inheritance for undated rows, editable dates on web and mobile.
+- Mobile: verify-email and forgot/reset screens, invoice type, PDF upload,
+  add-another-page, editable statement dates. Website: verify and reset pages,
+  multi-file/PDF upload, invoice review, editable statement dates.
+- Fixed: the root `.gitignore` ignored `web/src/lib/`, so it was never committed.
+- 210 backend tests, 12 website tests.

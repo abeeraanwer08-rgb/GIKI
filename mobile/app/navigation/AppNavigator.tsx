@@ -28,7 +28,7 @@ export type RootStackParamList = {
   Main: NavigatorScreenParams<TabParamList> | undefined;
   AddExpense: undefined;
   /** `documentType` is what the user said they are scanning; omitted = auto-detect. */
-  Camera: { documentType?: ScanDocumentType } | undefined;
+  Camera: { documentType?: ScanDocumentType; existingImages?: string[] } | undefined;
   ReceiptPreview: {
     /** Array of local image URIs — structured for multi-photo support in a future milestone */
     capturedImages: string[];

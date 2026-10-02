@@ -13,6 +13,7 @@ import {
 } from '@expo-google-fonts/inter';
 import AppNavigator from './app/navigation/AppNavigator';
 import AuthScreen from './app/screens/AuthScreen';
+import VerifyEmailScreen from './app/screens/VerifyEmailScreen';
 import { AuthProvider, useAuth } from './app/auth/AuthContext';
 import Splash from './app/ui/Splash';
 import { colors } from './app/ui/theme';
@@ -37,6 +38,7 @@ function Root() {
   const { status } = useAuth();
   if (status === 'loading') return null; // the splash covers this moment
   if (status === 'signedOut') return <AuthScreen />;
+  if (status === 'unverified') return <VerifyEmailScreen />;
   return (
     <NavigationContainer theme={navigationTheme}>
       <StatusBar style="dark" />

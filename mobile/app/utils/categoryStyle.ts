@@ -38,6 +38,8 @@ const DOCUMENT_TYPE_STYLES: Record<string, CategoryStyle> = {
   receipt: { icon: 'receipt', color: '#0E7A4F', tint: '#E7F5EE', onDark: '#6EE7B7' },
   utility_bill: { icon: 'flash', color: '#D97706', tint: '#FEF6E4', onDark: '#FCD34D' },
   wallet_screenshot: { icon: 'phone-portrait', color: '#2563EB', tint: '#EEF4FF', onDark: '#93C5FD' },
+  invoice: { icon: 'document-text', color: '#0891B2', tint: '#E6F7FB', onDark: '#67E8F9' },
+  bank_statement: { icon: 'business', color: '#2563EB', tint: '#EEF4FF', onDark: '#93C5FD' },
 };
 
 const DEFAULT_STYLE: CategoryStyle = { icon: 'card', color: '#64748B', tint: '#F1F4F7', onDark: '#CBD5E1' };
@@ -57,6 +59,7 @@ const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   utility_bill: 'Utility bill',
   wallet_screenshot: 'Wallet transfer',
   bank_statement: 'Bank statement',
+  invoice: 'Invoice',
 };
 
 export function documentTypeLabel(documentType: string | null | undefined): string {

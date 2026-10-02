@@ -84,7 +84,9 @@ class ParserCoercionTests(unittest.TestCase):
         self.assertEqual(len(result.transactions), 2)
         first, second = result.transactions
         self.assertEqual((first.debit, first.credit), (1250.0, None))
-        self.assertEqual((second.date, second.credit), (None, 300.0))
+        # A printed date that cannot be read stays blank (and is flagged on review);
+        # it is never silently replaced by a neighbouring row's date.
+        self.assertEqual((second.date, second.date_inferred, second.credit), (None, False, 300.0))
 
     def test_non_object_response_gives_an_empty_statement(self):
         self.assertEqual(self.build(["nope"]).transactions, [])
@@ -334,6 +336,25 @@ class SaveStatementTests(unittest.TestCase):
         credits_only = statement(transactions=[BankTransaction(description="Salary", credit=9.0)])
         self.assertEqual(self.post(credits_only).status_code, 422)
         self.assertEqual(self.store.rows, {})
+
+    def test_a_row_with_a_malformed_date_is_rejected_but_a_fixed_one_saves(self):
+        record = UniversalFinancialRecordMapper().from_bank_statement_analysis(statement())
+        payload = record.model_dump(mode="json")
+        payload["items"][0]["metadata"]["date"] = "5th Sept"
+        response = self.http.post("/api/v1/financial-records", json=payload)
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("Transaction 1 has an invalid date", response.json()["detail"]["errors"][0])
+        self.assertEqual(self.store.rows, {})
+        payload["items"][0]["metadata"]["date"] = "2026-09-05"
+        self.assertEqual(self.http.post("/api/v1/financial-records", json=payload).status_code, 201)
+
+    def test_a_row_without_a_date_is_filed_on_the_statement_end_date(self):
+        record = UniversalFinancialRecordMapper().from_bank_statement_analysis(statement())
+        payload = record.model_dump(mode="json")
+        payload["items"][0]["metadata"]["date"] = None
+        self.assertEqual(self.http.post("/api/v1/financial-records", json=payload).status_code, 201)
+        dates = {r["merchant_provider"]: r["transaction_date"] for r in self.store.rows.values()}
+        self.assertEqual(dates["Imtiaz Super Market"], "2026-09-30")
 
     def test_user_edited_category_is_kept(self):
         record = UniversalFinancialRecordMapper().from_bank_statement_analysis(statement())

@@ -10,6 +10,7 @@ import Txt from '../ui/Txt';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
 import EmptyState from '../ui/EmptyState';
+import { isPdfUri } from '../utils/pickReceipt';
 import { colors, gradients, spacing } from '../ui/theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Processing'>;
@@ -24,7 +25,7 @@ const STEPS = [
 const STATEMENT_STEPS = [
   'Uploading your photo',
   'Checking image quality',
-  'Reading every transaction with AI',
+  'Reading every page with AI',
   'Checking totals and balances',
 ] as const;
 
@@ -35,7 +36,9 @@ export default function ProcessingScreen({ navigation, route }: Props) {
   const { capturedImages, documentType } = route.params;
   const imageUri = capturedImages[0];
   const isStatement = documentType === 'bank_statement';
-  const steps = isStatement ? STATEMENT_STEPS : STEPS;
+  const isInvoice = documentType === 'invoice';
+  const slow = isStatement || isInvoice || capturedImages.length > 1 || isPdfUri(imageUri);
+  const steps = isStatement || isInvoice ? STATEMENT_STEPS : STEPS;
 
   const [activeStep, setActiveStep] = useState(0);
   const [error, setError] = useState<UploadError | null>(null);
@@ -143,10 +146,10 @@ export default function ProcessingScreen({ navigation, route }: Props) {
           </LinearGradient>
         </View>
         <Txt variant="title" align="center" style={styles.title}>
-          {isStatement ? 'Analysing your statement' : 'Analysing your receipt'}
+          {isStatement ? 'Analysing your statement' : isInvoice ? 'Analysing your invoice' : 'Analysing your receipt'}
         </Txt>
         <Txt variant="body" color={colors.inkSecondary} align="center">
-          {isStatement ? 'Statements can take up to a minute' : 'This usually takes a few seconds'}
+          {slow ? 'Multi-page documents can take up to a minute' : 'This usually takes a few seconds'}
         </Txt>
       </View>
 

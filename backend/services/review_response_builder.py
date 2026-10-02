@@ -108,6 +108,9 @@ class ReviewResponseBuilder:
                 fields[name] = self._field(
                     self._first_item_metadata(record, name), confidence
                 )
+        elif record.document_type == "invoice":
+            for name in ("invoice_number", "due_date"):
+                fields[name] = self._field(record.metadata.details.get(name), confidence)
         elif record.document_type == "bank_statement":
             for name in ("period_start", "period_end", "account_last4"):
                 fields[name] = self._field(record.metadata.details.get(name), confidence)

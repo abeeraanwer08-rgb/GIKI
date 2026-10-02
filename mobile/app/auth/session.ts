@@ -8,6 +8,8 @@ export interface SessionUser {
   id: string;
   email: string;
   name: string;
+  /** false until the emailed code has been entered. Older saved sessions omit it. */
+  email_verified?: boolean;
 }
 
 export interface Session {

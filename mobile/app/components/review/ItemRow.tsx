@@ -10,19 +10,43 @@ type Props = {
   amount: string;
   onChangeName: (text: string) => void;
   onChangeAmount: (text: string) => void;
-  /** Small line above the row, e.g. a transaction date. */
-  caption?: string;
+  /** Editable date shown above the row (bank statement rows). */
+  date?: string;
+  onChangeDate?: (text: string) => void;
+  /** The date was not printed and was copied from the previous row. */
+  dateAssumed?: boolean;
   /** When set, shows a remove button (used to drop non-spending rows from a statement). */
   onRemove?: () => void;
 };
 
-export default function ItemRow({ index, name, amount, onChangeName, onChangeAmount, caption, onRemove }: Props) {
+export default function ItemRow({ index, name, amount, onChangeName, onChangeAmount, date, onChangeDate, dateAssumed, onRemove }: Props) {
+  const dateInvalid = date !== undefined && date !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(date);
   return (
     <View style={[styles.wrap, index > 0 && styles.divider]}>
-    {caption ? (
-      <Txt variant="caption" color={colors.inkMuted} style={styles.caption}>
-        {caption}
-      </Txt>
+    {onChangeDate ? (
+      <View style={styles.dateRow}>
+        <TextInput
+          style={[styles.dateInput, (dateInvalid || date === '') && styles.dateInvalid]}
+          value={date}
+          onChangeText={onChangeDate}
+          placeholder="YYYY-MM-DD"
+          placeholderTextColor={colors.inkMuted}
+          maxLength={10}
+          autoCapitalize="none"
+          accessibilityLabel={`Date for ${name || 'item'}`}
+          underlineColorAndroid="transparent"
+        />
+        {(date === '' || dateInvalid) && (
+          <Txt variant="caption" color={colors.danger} style={styles.dateNote}>
+            {date === '' ? 'No date — set one' : 'Use YYYY-MM-DD'}
+          </Txt>
+        )}
+        {dateAssumed && !dateInvalid && date !== '' && (
+          <Txt variant="caption" color={colors.warning} style={styles.dateNote}>
+            date assumed — check
+          </Txt>
+        )}
+      </View>
     ) : null}
     <View style={styles.row}>
       <View style={styles.index}>
@@ -64,7 +88,19 @@ export default function ItemRow({ index, name, amount, onChangeName, onChangeAmo
 
 const styles = StyleSheet.create({
   wrap: { paddingVertical: spacing.sm },
-  caption: { marginLeft: 32, marginBottom: 2 },
+  dateRow: { flexDirection: 'row', alignItems: 'center', marginLeft: 32, marginBottom: 4 },
+  dateInput: {
+    height: 26,
+    width: 104,
+    paddingHorizontal: 8,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surfaceMuted,
+    fontFamily: fonts.medium,
+    fontSize: 12,
+    color: colors.inkSecondary,
+  },
+  dateInvalid: { backgroundColor: colors.dangerSoft, color: colors.danger },
+  dateNote: { marginLeft: spacing.sm },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

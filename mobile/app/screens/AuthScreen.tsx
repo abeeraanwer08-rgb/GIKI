@@ -5,7 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useAuth } from '../auth/AuthContext';
-import { AuthError } from '../auth/authApi';
+import { AuthError, forgotPassword, resetPassword } from '../auth/authApi';
 import Txt from '../ui/Txt';
 import Button from '../ui/Button';
 import Logo from '../ui/Logo';
@@ -13,18 +13,20 @@ import TextField from '../ui/TextField';
 import { haptics } from '../ui/haptics';
 import { colors, fonts, gradients, radius, spacing } from '../ui/theme';
 
-type Mode = 'signIn' | 'signUp';
+type Mode = 'signIn' | 'signUp' | 'forgot' | 'reset';
 
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const MIN_PASSWORD = 8;
 
-type FieldErrors = { name?: string; email?: string; password?: string };
+type FieldErrors = { name?: string; email?: string; password?: string; code?: string };
 
-function validate(mode: Mode, name: string, email: string, password: string): FieldErrors {
+function validate(mode: Mode, name: string, email: string, password: string, code: string): FieldErrors {
   const errors: FieldErrors = {};
   if (mode === 'signUp' && !name.trim()) errors.name = 'Enter your name.';
   if (!EMAIL.test(email.trim())) errors.email = 'Enter a valid email address.';
-  if (mode === 'signUp' && password.length < MIN_PASSWORD) {
+  if (mode === 'forgot') return errors;
+  if (mode === 'reset' && !/^\d{6}$/.test(code.trim())) errors.code = 'Enter the 6-digit code from the email.';
+  if ((mode === 'signUp' || mode === 'reset') && password.length < MIN_PASSWORD) {
     errors.password = `Use at least ${MIN_PASSWORD} characters.`;
   } else if (!password) {
     errors.password = 'Enter your password.';
@@ -42,23 +44,27 @@ export default function AuthScreen() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [code, setCode] = useState('');
+  const [notice, setNotice] = useState<string | null>(null);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const switchMode = (next: Mode) => {
+  const switchMode = (next: Mode, keepNotice = false) => {
     if (next === mode) return;
     haptics.tap();
     setMode(next);
     setErrors({});
     setFormError(null);
+    if (!keepNotice) setNotice(null);
   };
 
   const submit = async () => {
     if (busy) return;
-    const found = validate(mode, name, email, password);
+    const found = validate(mode, name, email, password, code);
     setErrors(found);
     setFormError(null);
+    setNotice(null);
     if (Object.keys(found).length > 0) {
       haptics.warning();
       return;
@@ -67,8 +73,21 @@ export default function AuthScreen() {
     setBusy(true);
     try {
       if (mode === 'signIn') await signIn(email.trim(), password);
-      else await signUp(name.trim(), email.trim(), password);
-      // On success the navigator swaps to the app; nothing more to do here.
+      else if (mode === 'signUp') await signUp(name.trim(), email.trim(), password);
+      else if (mode === 'forgot') {
+        await forgotPassword(email.trim());
+        setNotice('If an account exists for that email, we’ve sent a 6-digit code.');
+        setMode('reset');
+        setBusy(false);
+      } else {
+        await resetPassword(email.trim(), code.trim(), password);
+        setNotice('Password reset. Sign in with your new password.');
+        setPassword('');
+        setCode('');
+        setMode('signIn');
+        setBusy(false);
+      }
+      // Signing in or up swaps the navigator (to the app, or the verify-email screen).
     } catch (error) {
       haptics.warning();
       setFormError(error instanceof AuthError ? error.message : 'Something went wrong. Please try again.');
@@ -77,6 +96,8 @@ export default function AuthScreen() {
   };
 
   const signUpMode = mode === 'signUp';
+  const recovery = mode === 'forgot' || mode === 'reset';
+  const needsNewPassword = signUpMode || mode === 'reset';
 
   return (
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -103,6 +124,17 @@ export default function AuthScreen() {
         </LinearGradient>
 
         <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.xxl) }]}>
+          {recovery && (
+            <View style={styles.recoveryHead}>
+              <Txt variant="title">{mode === 'forgot' ? 'Forgot your password?' : 'Enter your code'}</Txt>
+              <Txt variant="body" color={colors.inkSecondary} style={styles.recoveryBody}>
+                {mode === 'forgot'
+                  ? 'Enter your email and we’ll send you a 6-digit code to reset it.'
+                  : 'Enter the code we emailed you and choose a new password.'}
+              </Txt>
+            </View>
+          )}
+          {!recovery && (
           <View style={styles.segment} accessibilityRole="tablist">
             {(['signIn', 'signUp'] as const).map((m) => {
               const active = m === mode;
@@ -121,6 +153,16 @@ export default function AuthScreen() {
               );
             })}
           </View>
+          )}
+
+          {!!notice && !formError && (
+            <View style={[styles.banner, styles.bannerOk]}>
+              <Ionicons name="checkmark-circle" size={18} color={colors.primary} />
+              <Txt variant="label" color={colors.primary} style={styles.bannerText}>
+                {notice}
+              </Txt>
+            </View>
+          )}
 
           {!!formError && (
             <View style={styles.banner} accessibilityRole="alert">
@@ -162,35 +204,76 @@ export default function AuthScreen() {
             onSubmitEditing={() => passwordRef.current?.focus()}
             placeholder="you@example.com"
           />
-          <TextField
-            ref={passwordRef}
-            label="Password"
-            icon="lock-closed-outline"
-            secret
-            value={password}
-            onChangeText={setPassword}
-            error={errors.password}
-            autoCapitalize="none"
-            autoComplete={signUpMode ? 'new-password' : 'current-password'}
-            textContentType={signUpMode ? 'newPassword' : 'password'}
-            returnKeyType="go"
-            onSubmitEditing={submit}
-            placeholder={signUpMode ? 'At least 8 characters' : 'Your password'}
-          />
+          {mode === 'reset' && (
+            <TextField
+              label="6-digit code"
+              icon="keypad-outline"
+              value={code}
+              onChangeText={(t) => setCode(t.replace(/\D/g, '').slice(0, 6))}
+              error={errors.code}
+              keyboardType="number-pad"
+              maxLength={6}
+              autoComplete="one-time-code"
+              textContentType="oneTimeCode"
+              returnKeyType="next"
+              onSubmitEditing={() => passwordRef.current?.focus()}
+              placeholder="123456"
+            />
+          )}
+          {mode !== 'forgot' && (
+            <TextField
+              ref={passwordRef}
+              label={mode === 'reset' ? 'New password' : 'Password'}
+              icon="lock-closed-outline"
+              secret
+              value={password}
+              onChangeText={setPassword}
+              error={errors.password}
+              autoCapitalize="none"
+              autoComplete={needsNewPassword ? 'new-password' : 'current-password'}
+              textContentType={needsNewPassword ? 'newPassword' : 'password'}
+              returnKeyType="go"
+              onSubmitEditing={submit}
+              placeholder={needsNewPassword ? 'At least 8 characters' : 'Your password'}
+            />
+          )}
+
+          {mode === 'signIn' && (
+            <Pressable
+              onPress={() => switchMode('forgot')}
+              style={styles.forgot}
+              accessibilityRole="button"
+              hitSlop={8}
+            >
+              <Txt variant="label" color={colors.primary}>
+                Forgot password?
+              </Txt>
+            </Pressable>
+          )}
 
           <Button
-            title={signUpMode ? 'Create account' : 'Sign in'}
+            title={
+              mode === 'forgot' ? 'Send code' : mode === 'reset' ? 'Reset password' : signUpMode ? 'Create account' : 'Sign in'
+            }
             iconRight="arrow-forward"
             onPress={submit}
             loading={busy}
             style={styles.submit}
           />
 
-          <Txt variant="caption" color={colors.inkMuted} align="center" style={styles.note}>
-            {signUpMode
-              ? 'Your expenses stay private to your account.'
-              : 'New here? Choose “Create account” above.'}
-          </Txt>
+          {recovery ? (
+            <Pressable onPress={() => switchMode('signIn')} style={styles.back} accessibilityRole="button">
+              <Txt variant="label" color={colors.inkSecondary}>
+                ← Back to sign in
+              </Txt>
+            </Pressable>
+          ) : (
+            <Txt variant="caption" color={colors.inkMuted} align="center" style={styles.note}>
+              {signUpMode
+                ? 'Your expenses stay private to your account.'
+                : 'New here? Choose “Create account” above.'}
+            </Txt>
+          )}
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -235,5 +318,10 @@ const styles = StyleSheet.create({
   },
   bannerText: { flex: 1, marginLeft: spacing.sm },
   submit: { marginTop: spacing.sm },
+  bannerOk: { backgroundColor: colors.primarySoft },
+  forgot: { alignSelf: 'flex-end', marginTop: -spacing.sm, marginBottom: spacing.sm },
+  recoveryHead: { marginBottom: spacing.xl },
+  recoveryBody: { marginTop: spacing.xs },
+  back: { alignItems: 'center', paddingVertical: spacing.md, marginTop: spacing.sm },
   note: { marginTop: spacing.lg },
 });

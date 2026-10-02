@@ -18,15 +18,26 @@ Returns the health status of the backend.
 
 ### Authentication
 
-`POST /api/v1/auth/signup` (`{name, email, password≥8}`) → **201** and
-`POST /api/v1/auth/login` (`{email, password}`) → **200**, both returning
-`{"token": "...", "user": {"id", "name", "email"}}`. Duplicate email → 409,
-bad input → 422, wrong credentials → 401 (identical for unknown email),
-server missing `AUTH_JWT_SECRET` → 503. `GET /api/v1/auth/me` returns the user.
+All of these are under `/api/v1/auth`. A token comes back from `signup` and
+`login` as `{"token": "...", "user": {"id", "name", "email", "email_verified"}}`.
 
-Every endpoint below except `/health` requires `Authorization: Bearer <token>`
-and returns **401** without a valid one. Data is scoped to the signed-in user.
-`POST /api/v1/receipt/upload` additionally returns **413** above 10 MB.
+| Endpoint | Body | Result |
+|---|---|---|
+| `POST /signup` | `{name, email, password≥8}` | **201**; emails a 6-digit code. 409 email taken, 422 bad input, 429 too many sign-ups from one network, 503 server not configured |
+| `POST /login` | `{email, password}` | **200**; 401 wrong credentials (identical for an unknown email); **429** after 5 wrong passwords for an email (or 20 from one network) — locked 15 minutes, `Retry-After` header and `retry_after` seconds |
+| `GET /me` | — | the user, with `email_verified` |
+| `POST /verify-email` | `{code}` (signed in) | **200** user; 400 wrong, expired or used-up code (5 wrong tries burn it) |
+| `POST /resend-verification` | — (signed in) | **202**; 429 at most one a minute |
+| `POST /forgot-password` | `{email}` | **202** with the same message whether or not the account exists; 429 after 3 a hour per email |
+| `POST /reset-password` | `{email, code, new_password≥8}` | **200**; 400 wrong/expired code (same answer for an unknown email); signs out every existing session |
+
+Codes are 6 digits, expire after 15 minutes, are stored only as a keyed hash, and
+a new code replaces older ones.
+
+Every other endpoint (except `/health`) requires `Authorization: Bearer <token>` and
+returns **401** without a valid one (also after a password reset or account
+deletion), and **403** `{"detail": {"error": "email_not_verified"}}` until the
+email is verified. Data is scoped to the signed-in user.
 
 ---
 
@@ -151,25 +162,56 @@ include today. An inverted range → HTTP 422.
 
 ---
 
-### POST /api/v1/receipt/upload — `document_type`
+### POST /api/v1/receipt/upload — files, PDFs and `document_type`
 
-`multipart/form-data` with `file` and an optional `document_type` field:
-`receipt`, `bank_statement`, `utility_bill`, `wallet_screenshot` or `auto`
-(default). An explicit type skips the heuristic classifier; an unknown value →
-HTTP 422. Bank statements are best sent with `document_type=bank_statement`.
+`multipart/form-data` with the `file` field and an optional `document_type`:
+`receipt`, `invoice`, `bank_statement`, `utility_bill`, `wallet_screenshot` or
+`auto` (default). An explicit type skips classification; an unknown value → 422.
+
+- **Pages:** send `file` once for one image or PDF, or repeat it for the pages of
+  one document in order (images and/or a PDF). PDFs are rendered page by page.
+  Limits: 10 MB per file, 25 MB in total, 12 pages → **413** / **422**
+  (`Too many pages`). A damaged, password-protected or empty PDF → 422
+  (`Unusable PDF`, with a user-safe `message`).
+- **Which types may span pages:** `bank_statement` and `invoice`. Several pages of
+  any other type → 422 `multi_page_unsupported`.
+- Every page must pass the image-quality check; a failure → 400 naming the `page`.
+  Pages are read in parallel and merged: header fields from the first page that
+  has them, totals from the last, rows repeated across a page break dropped, and
+  a year-less date resolved with the period printed on any page.
+- **Auto-detection:** when the image heuristics are unsure the vision model
+  double-checks the type (and is only trusted when it is confident); a failure
+  falls back to the heuristics. Bank statements and invoices are best sent with an
+  explicit `document_type`.
+
+**Invoices** return the usual review shape: `extracted_items` are the lines;
+`editable_fields.merchant` is the vendor, `purchase_date` the invoice date;
+`processing_metadata` carries `subtotal_amount`, `tax_amount`,
+`delivery_charge` (shipping), `discount_amount` and
+`details.{invoice_number, due_date, payment_terms, vendor_tax_id}`; warnings flag
+a line whose qty × price ≠ amount, lines ≠ subtotal, or subtotal + tax + shipping
+− discount ≠ total.
 
 For a statement the response is the usual review shape with:
 
 - `extracted_items` — one per **debit** row (`description`, `amount`,
-  `category`, `metadata.date`, `metadata.balance`, `metadata.reference`);
-  credits are not spending and are summarised instead.
+  `category`, `metadata.date`, `metadata.date_inferred`, `metadata.balance`,
+  `metadata.reference`); credits are not spending and are summarised instead.
+  Printed dates are parsed in code (`05/09/2026`, `05-Sep`, `Sep 5, 2026`…); a row
+  that printed no date gets the previous row's date with `date_inferred: true`; a
+  printed date that cannot be read stays `null`.
 - `editable_fields.merchant` = bank name, `purchase_date` = period end,
   `total_amount` = sum of the debit rows, plus `period_start`, `period_end`,
   `account_last4`.
 - `processing_metadata.details` — `opening_balance`, `closing_balance`,
   `debit_count`, `credit_count`, `total_credits`.
 - `validation_warnings` — printed totals that do not match the rows, a broken
-  running balance, rows without an amount, missing header fields.
+  running balance, rows without an amount, missing header fields, rows without a
+  readable date, rows with an assumed date, and dates outside the period.
+
+Saving rejects a row whose `metadata.date` is not a real `YYYY-MM-DD` (422,
+`Transaction N has an invalid date`); a row with no date is filed on the
+statement end date.
 
 Saving a `bank_statement` UFR (`POST /api/v1/financial-records`) stores **one
 record per debit row** (ids derived from the row's content) and returns
